@@ -1,0 +1,29 @@
+[project]
+name = "OptFormer"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Leo", email = "im.yczeng@foxmail.com"},
+]
+dependencies = [
+    "chembl-webresource-client>=0.10.9",
+    "pandarallel>=1.6.5",
+    "rdkit>=2023.9.5",
+]
+requires-python = "==3.9.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+src_paths = ["src", "scripts/*"]
+
+[tool.mypy]
+ignore_missing_imports = true
