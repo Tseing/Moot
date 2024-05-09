@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:ed0ff7f0d6b1c5437a2c9b53fc7656c27f5ff9dd4fae06998657616ca15a1985"
+content_hash = "sha256:7e5af25eba984ced78e0fb0d869842c517250dfa72aaaeaacd6ef96eee950737"
 
 [[package]]
 name = "attrs"
@@ -129,6 +129,21 @@ groups = ["default"]
 files = [
     {file = "idna-3.7-py3-none-any.whl", hash = "sha256:82fee1fc78add43492d3a1898bfa6d8a904cc97d8427f683ed8e798d07761aa0"},
     {file = "idna-3.7.tar.gz", hash = "sha256:028ff3aadf0609c1fd278d8ea3089299412a7a8b9bd005dd08b9f8285bcb5cfc"},
+]
+
+[[package]]
+name = "jaxtyping"
+version = "0.2.28"
+requires_python = "~=3.9"
+summary = "Type annotations and runtime checking for shape and dtype of JAX arrays, and PyTrees."
+groups = ["default"]
+dependencies = [
+    "numpy>=1.20.0",
+    "typeguard==2.13.3",
+]
+files = [
+    {file = "jaxtyping-0.2.28-py3-none-any.whl", hash = "sha256:4a54eb964087cd46463d9a86c805b4e4f5c20cce5f22049d6f35a26d9f105bd3"},
+    {file = "jaxtyping-0.2.28.tar.gz", hash = "sha256:cd20bf1558a90c6d77c589354e35670ecc5b94925ef45bf1c020fde7b44fac8d"},
 ]
 
 [[package]]
@@ -400,6 +415,17 @@ groups = ["default"]
 files = [
     {file = "threadpoolctl-3.4.0-py3-none-any.whl", hash = "sha256:8f4c689a65b23e5ed825c8436a92b818aac005e0f3715f6a1664d7c7ee29d262"},
     {file = "threadpoolctl-3.4.0.tar.gz", hash = "sha256:f11b491a03661d6dd7ef692dd422ab34185d982466c49c8f98c8f716b5c93196"},
+]
+
+[[package]]
+name = "typeguard"
+version = "2.13.3"
+requires_python = ">=3.5.3"
+summary = "Run-time type checker for Python"
+groups = ["default"]
+files = [
+    {file = "typeguard-2.13.3-py3-none-any.whl", hash = "sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1"},
+    {file = "typeguard-2.13.3.tar.gz", hash = "sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4"},
 ]
 
 [[package]]
