@@ -10,7 +10,7 @@ from .tokenizer import MMPTokenizer
 
 
 class MMPDataset(Dataset):
-    def __init__(self, data_path: str, max_len: int, **kwargs) -> None:
+    def __init__(self, data_path: str, max_len: int, tokenizer: MMPTokenizer, **kwargs) -> None:
         super().__init__()
         df = pd.read_csv(data_path, **kwargs)
         src = df.iloc[:, 0].to_numpy()
@@ -20,7 +20,7 @@ class MMPDataset(Dataset):
         self.src = src
         self.tgt = tgt
         self.max_len = max_len
-        self.tokenizer = MMPTokenizer()
+        self.tokenizer = tokenizer
 
     def __len__(self):
         return self.len

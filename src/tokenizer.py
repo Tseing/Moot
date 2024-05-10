@@ -1,16 +1,16 @@
 import copy
 import re
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union
 
 import numpy as np
+import yaml
 from numpy.typing import NDArray
+from tqdm import tqdm
 
 
 class Tokenizer(ABC):
-    def __init__(
-        self, word_table: List[str], special_tokens: Optional[List[str]] = None
-    ):
+    def __init__(self, special_tokens: Optional[List[str]] = None):
         self.pad = "{pad}"
         self.unk = "{unk}"
         self.cls = "{cls}"
@@ -21,14 +21,20 @@ class Tokenizer(ABC):
         if special_tokens is not None:
             self.special_tokens.extend(special_tokens)
 
+    def load_word_table(self, word_table_path: str):
+        with open(word_table_path, "r", encoding="utf-8") as f:
+            word_table = yaml.safe_load(f)
+
         self.word_table = self.special_tokens + word_table
 
         self.vocab2index = {w: i for i, w in enumerate(self.word_table)}
         self.vocab2token = {i: w for i, w in enumerate(self.word_table)}
         self.vocab_size = len(self.word_table)
-        self.special_tokens_id = [
-            self.vocab2index[token] for token in self.special_tokens
-        ]
+        self.special_tokens_id = [self.vocab2index[token] for token in self.special_tokens]
+
+    @abstractmethod
+    def build_word_table(self, seqs: List[str], dump_path: str) -> List[str]:
+        assert False, "Abstract method `tokenize` has not yet initialized."
 
     @abstractmethod
     def tokenize(self, seq: str) -> Union[NDArray, Tuple[NDArray, NDArray]]:
@@ -39,10 +45,7 @@ class Tokenizer(ABC):
 
     def covert_tokens2ids(self, tokens: List[str]) -> NDArray:
         return np.array(
-            [
-                self.vocab2index.get(token, self.vocab2index[self.unk])
-                for token in tokens
-            ],
+            [self.vocab2index.get(token, self.vocab2index[self.unk]) for token in tokens],
             dtype=np.int32,
         )
 
@@ -78,13 +81,25 @@ class Tokenizer(ABC):
 
 
 class StrTokenizer(Tokenizer):
-    def __init__(self, word_table: List[str], pattern: str):
+    def __init__(self, pattern: str):
         self.bos = "{bos}"
         self.eos = "{eos}"
         self.pattern = pattern
         special_tokens = [self.bos, self.eos]
 
-        super().__init__(word_table, special_tokens)
+        super().__init__(special_tokens)
+
+    def build_word_table(self, seqs: Iterable[str], dump_path: Optional[str] = None) -> List[str]:
+        unique_tokens = set()
+        for seq in tqdm(seqs):
+            unique_tokens.update(set(self.find_bald_tokens(seq)))
+
+        word_table = sorted(list(unique_tokens))
+        if dump_path:
+            with open(dump_path, "w", encoding="utf-8") as f:
+                yaml.dump(word_table, f)
+
+        return word_table
 
     def tokenize(self, seq: str) -> NDArray:
         tokens = self._find_tokens(seq)
@@ -105,111 +120,13 @@ class StrTokenizer(Tokenizer):
 
 class SmilesTokenizer(StrTokenizer):
     def __init__(self):
-        word_table = [
-            "#",
-            ".",
-            "%10",
-            "%11",
-            "%12",
-            "(",
-            ")",
-            "-",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-            "8",
-            "9",
-            "<",
-            "=",
-            "B",
-            "Br",
-            "C",
-            "Cl",
-            "F",
-            "I",
-            "N",
-            "O",
-            "P",
-            "S",
-            "[B-]",
-            "[BH-]",
-            "[BH2-]",
-            "[BH3-]",
-            "[B]",
-            "[C+]",
-            "[C-]",
-            "[CH+]",
-            "[CH-]",
-            "[CH2+]",
-            "[CH2]",
-            "[CH]",
-            "[F+]",
-            "[H]",
-            "[I+]",
-            "[IH2]",
-            "[IH]",
-            "[N+]",
-            "[N-]",
-            "[NH+]",
-            "[NH-]",
-            "[NH2+]",
-            "[NH3+]",
-            "[N]",
-            "[O+]",
-            "[O-]",
-            "[OH+]",
-            "[O]",
-            "[P+]",
-            "[PH+]",
-            "[PH2+]",
-            "[PH]",
-            "[S+]",
-            "[S-]",
-            "[SH+]",
-            "[SH]",
-            "[Se+]",
-            "[SeH+]",
-            "[SeH]",
-            "[Se]",
-            "[Si-]",
-            "[SiH-]",
-            "[SiH2]",
-            "[SiH]",
-            "[Si]",
-            "[b-]",
-            "[bH-]",
-            "[c+]",
-            "[c-]",
-            "[cH+]",
-            "[cH-]",
-            "[n+]",
-            "[n-]",
-            "[nH+]",
-            "[nH]",
-            "[o+]",
-            "[s+]",
-            "[sH+]",
-            "[se+]",
-            "[se]",
-            "b",
-            "c",
-            "n",
-            "o",
-            "p",
-            "s",
-        ]
-
         pattern = (
             "(\[[^\]]+]|{unk}|<|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|"
             "\(|\)|\.|=|#|-|\+|\\\\|\/|:|~|@|\?|>|\*|\$|\%"
             "[0-9]{2}|[0-9])"
         )
 
-        super().__init__(word_table, pattern)
+        super().__init__(pattern)
 
 
 class MMPTokenizer(SmilesTokenizer):
