@@ -7,7 +7,7 @@ import pandas as pd
 from matplotlib import colormaps
 from matplotlib.pyplot import Figure
 
-from data_utils import split_path
+from src.data_utils import split_path
 
 CMAP = colormaps["Set2"]
 XLABEL_FONTSIZE = 16

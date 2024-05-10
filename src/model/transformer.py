@@ -81,13 +81,13 @@ class Transformer(nn.Module):
         enc_n_layers: int,
         dec_n_layers: int,
         vocab_size: int,
-        pad_idx: int,
+        pad_value: int,
         max_len: int,
         device: Optional[Device] = None,
     ) -> None:
         super().__init__()
         self.device = device
-        self.pad_idx = pad_idx
+        self.pad_value = pad_value
         self.d_model = d_model
         self.embedding = nn.Embedding(vocab_size, d_model, device=device)
         self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=max_len, device=device)
@@ -115,7 +115,7 @@ class Transformer(nn.Module):
         self, src: Int[Tensor, "bsz seq_len"], tgt: Int[Tensor, "bsz seq_len"]
     ) -> Float[Tensor, "bsz seq_len vocab_size"]:
         src_mask, src_key_padding_mask, tgt_mask, tgt_key_padding_mask = self.create_masks(
-            src, tgt, self.pad_idx, self.device
+            src, tgt, self.pad_value, self.device
         )
 
         src = self.embedding(src) * math.sqrt(self.d_model)
@@ -140,7 +140,7 @@ class Transformer(nn.Module):
     def create_masks(
         src: Int[Tensor, "bsz seq_len"],
         tgt: Int[Tensor, "bsz seq_len"],
-        pad_idx: int,
+        pad_value: int,
         device: Optional[Device] = None,
     ) -> Tuple[
         Bool[Tensor, "src_seq_len src_seq_len"],
@@ -157,8 +157,8 @@ class Transformer(nn.Module):
         src_mask = torch.zeros((src_seq_len, src_seq_len), device=device).type(torch.bool)
         tgt_mask = nn.Transformer.generate_square_subsequent_mask(tgt_seq_len, device=device)
 
-        src_padding_mask = (src == pad_idx).to(device)
-        tgt_padding_mask = (tgt == pad_idx).to(device)
+        src_padding_mask = (src == pad_value).to(device)
+        tgt_padding_mask = (tgt == pad_value).to(device)
 
         return src_mask, src_padding_mask, tgt_mask, tgt_padding_mask
 

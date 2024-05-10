@@ -3,7 +3,7 @@ from collections import Counter
 
 import pandas as pd
 
-from data_utils import split_path, generate_unique_id
+from src.data_utils import split_path, generate_unique_id
 
 if __name__ == "__main__":
     path = "../../data/1bond/100k_dataset/val.csv"

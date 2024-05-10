@@ -7,7 +7,7 @@ import pandas as pd
 from pandarallel import pandarallel
 from sklearn.model_selection import train_test_split
 
-from data_utils import randomize_smiles, smiles2smarts, split_path
+from src.data_utils import randomize_smiles, smiles2smarts, split_path
 
 TRAIN_SIZE = 100000
 VAL_SIZE = 10000

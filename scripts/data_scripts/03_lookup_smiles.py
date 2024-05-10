@@ -4,7 +4,7 @@ import pickle
 import pandas as pd
 from pandarallel import pandarallel
 
-from data_utils import split_path
+from src.data_utils import split_path
 
 if __name__ == "__main__":
     path = "../../data/1bond/mmp_pair_1bond_raw.csv"

@@ -4,7 +4,7 @@ import pickle
 import pandas as pd
 from pandarallel import pandarallel
 
-from data_utils import canonicalize_smiles, split_path
+from src.data_utils import canonicalize_smiles, split_path
 
 if __name__ == "__main__":
     pandarallel.initialize(nb_workers=20)

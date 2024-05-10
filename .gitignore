@@ -1,5 +1,6 @@
 # Custom ignore
 data/
+*.ipynb
 
 # Ascend-compiled
 kernel_meta/

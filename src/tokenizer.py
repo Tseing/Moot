@@ -107,6 +107,7 @@ class SmilesTokenizer(StrTokenizer):
     def __init__(self):
         word_table = [
             "#",
+            ".",
             "%10",
             "%11",
             "%12",
