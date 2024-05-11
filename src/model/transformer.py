@@ -5,9 +5,8 @@ import torch
 import torch.nn as nn
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-from typing_extensions import TypeAlias
 
-Device: TypeAlias = torch.device
+from ..typing import Device
 
 
 class Encoder(nn.Module):

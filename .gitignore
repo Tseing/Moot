@@ -1,9 +1,12 @@
 # Custom ignore
-data/
+data/*
+checkpoints/
 *.ipynb
+!data/word_table.yaml
 
 # Ascend-compiled
 kernel_meta/
+kernel_meta_*/
 fusion_result.json
 
 # Byte-compiled / optimized / DLL files

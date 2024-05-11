@@ -25,12 +25,17 @@ class Tokenizer(ABC):
         with open(word_table_path, "r", encoding="utf-8") as f:
             word_table = yaml.safe_load(f)
 
-        self.word_table = self.special_tokens + word_table
+        self.word_table: List[str] = self.special_tokens + word_table
 
         self.vocab2index = {w: i for i, w in enumerate(self.word_table)}
         self.vocab2token = {i: w for i, w in enumerate(self.word_table)}
         self.vocab_size = len(self.word_table)
         self.special_tokens_id = [self.vocab2index[token] for token in self.special_tokens]
+
+        self._vec_tokens2ids = np.vectorize(
+            lambda token: self.vocab2index.get(token, self.vocab2index[self.unk])
+        )
+        self._vec_ids2tokens = np.vectorize(lambda id: self.vocab2token.get(id, self.unk))
 
     @abstractmethod
     def build_word_table(self, seqs: List[str], dump_path: str) -> List[str]:
@@ -40,14 +45,20 @@ class Tokenizer(ABC):
     def tokenize(self, seq: str) -> Union[NDArray, Tuple[NDArray, NDArray]]:
         assert False, "Abstract method `tokenize` has not yet initialized."
 
-    def convert_ids2tokens(self, ids: List[int]) -> List[str]:
-        return [self.vocab2token.get(id, self.unk) for id in ids]
+    def convert_ids2tokens(self, ids: Iterable[int]) -> NDArray:
+        return np.array([self.vocab2token.get(id, self.unk) for id in ids])
 
-    def covert_tokens2ids(self, tokens: List[str]) -> NDArray:
+    def covert_tokens2ids(self, tokens: Iterable[str]) -> NDArray:
         return np.array(
             [self.vocab2index.get(token, self.vocab2index[self.unk]) for token in tokens],
             dtype=np.int32,
         )
+
+    def vec_ids2tokens(self, ids: NDArray) -> NDArray:
+        return self.vec_ids2tokens(ids)
+
+    def vec_tokens2ids(self, tokens: NDArray) -> NDArray:
+        return self._vec_tokens2ids(tokens)
 
     def find_bald_tokens(self, seq: str) -> List[str]:
         seq = seq.strip()
@@ -102,16 +113,16 @@ class StrTokenizer(Tokenizer):
         return word_table
 
     def tokenize(self, seq: str) -> NDArray:
-        tokens = self._find_tokens(seq)
-        return self.covert_tokens2ids(tokens)
+        tokens = np.array(self._find_tokens(seq))
+        return self.vec_tokens2ids(tokens)
 
     def fast_tokenize(self, seq: str) -> NDArray:
-        tokens = seq.split()
-        return self.covert_tokens2ids(tokens)
+        tokens = np.array(seq.split())
+        return self.vec_tokens2ids(tokens)
 
     def bald_tokenize(self, bald_tokens: List[str]):
-        tokens = self._format_tokens(bald_tokens)
-        return self.covert_tokens2ids(tokens)
+        tokens = np.array(self._format_tokens(bald_tokens))
+        return self.vec_tokens2ids(tokens)
 
     def tokenize2str(self, seq: str) -> str:
         tokens = self._find_tokens(seq)
