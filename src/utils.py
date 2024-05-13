@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import List, Tuple
 
@@ -97,3 +98,26 @@ def cal_validity(hyp: str) -> float:
         validity = 1.0
 
     return validity
+
+class Log(logging.Logger):
+    def __init__(self, name: str, log_path: str) -> None:
+        super().__init__(name)
+        self.log_path = log_path
+
+        self.setLevel(logging.DEBUG)
+        self.file_handler = logging.FileHandler(log_path, mode="a+")
+        self.console_handler = logging.StreamHandler()
+
+        formatter = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        self.file_handler.setFormatter(formatter)
+        self.console_handler.setFormatter(formatter)
+        self.addHandler(self.file_handler)
+        self.addHandler(self.console_handler)
+
+    def console_off(self) -> None:
+        self.removeHandler(self.console_handler)
+
+    def console_on(self) -> None:
+        self.addHandler(self.console_handler)

@@ -75,9 +75,17 @@ if __name__ == "__main__":
     # )
     criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
 
-    trainer = ModelTrainer(model, optimizer, criterion, device)
     metrics = MMPMetrics(tokenizer)
     saver = ModelSaver("../checkpoints", len(train_dl), model_num_per_epoch=5)
-    trainer.setup_strategy(train_dl, val_dl, metrics, saver)
-    trainer.evaluate(val_dl, metrics)
-    # trainer.run(epoch_num=1)
+
+    trainer = ModelTrainer(
+        model=model,
+        optimizer=optimizer,
+        criterion=criterion,
+        metrics=metrics,
+        saver=saver,
+        tokenizer=tokenizer,
+        device=device,
+    )
+    # trainer.evaluate(val_dl, metrics)
+    trainer.run(train_dl, val_dl, epoch_num=5)

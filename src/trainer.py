@@ -1,5 +1,7 @@
 import os.path as osp
+from typing import Optional
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn.modules.loss import _Loss
@@ -8,7 +10,8 @@ from torch.utils.data import DataLoader
 
 from .metrics import ModelMetrics
 from .typing import Device
-from .utils import now_time
+from .utils import Log, now_time
+from .tokenizer import StrTokenizer
 
 
 class ModelSaver:
@@ -50,25 +53,26 @@ class ModelTrainer:
         criterion: _Loss,
         # TODO: scheduler
         # scheduler: LRScheduler,
+        metrics: ModelMetrics,
+        saver: ModelSaver,
+        tokenizer: StrTokenizer,
         device: Device,
+        logger: Optional[Log] = None,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
         # self.scheduler = scheduler
-        self.device = device
-
-    def setup_strategy(
-        self,
-        train_dataloader: DataLoader,
-        val_dataloader: DataLoader,
-        metrics: ModelMetrics,
-        saver: ModelSaver,
-    ) -> None:
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
         self.metrics = metrics
         self.saver = saver
+        self.tokenizer = tokenizer
+        self.device = device
+        self.logger = logger
+
+        if self.logger:
+            self.info = lambda stdout: self.logger.info(stdout)
+        else:
+            self.info = lambda stdout: print(stdout)
 
     def train(self, dataloader: DataLoader, saver: ModelSaver):
         self.model.train()
@@ -79,19 +83,21 @@ class ModelTrainer:
             tgt = tgt.to(self.device)
 
             self.optimizer.zero_grad()
-            output = self.model(src, tgt)
+            output = self.model(src, tgt[:, :-1])
 
-            loss = self.criterion(output.transpose(1, 2), tgt.long())
+            loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
             loss.backward()
             self.optimizer.step()
 
             epoch_loss += loss.item()
 
-            print(
+            step_stdout = (
                 f"[{now_time()}] Epoch: {epoch} Step: {step} "
-                f"({((step + 1) / len(dataloader) * 100, 2)}%), "
+                f"({(step + 1) / len(dataloader) * 100 : .2f}%), "
                 f"Train Loss: {loss.item()}."
             )
+
+            self.info(step_stdout)
 
             saver.monitor(self.model, epoch, step)
 
@@ -104,31 +110,42 @@ class ModelTrainer:
             for step, (src, tgt) in enumerate(dataloader):
                 src = src.to(self.device)
                 tgt = tgt.to(self.device)
-                output = self.model(src, tgt)
+                output = self.model(src, tgt[:, :-1])
 
-                loss = self.criterion(output.transpose(1, 2), tgt.long())
+                loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
                 epoch_loss += loss.item()
 
-                output_seq = output.argmax(dim=-1).squeeze().cpu().numpy()
+                output_seq = output.argmax(dim=-1).cpu().numpy()
+                # Insert <bos> token in the first position.
+                output_seq = np.pad(
+                    output_seq,
+                    ([0, 0], [1, 0]),
+                    "constant",
+                    constant_values=self.tokenizer.vocab2index[self.tokenizer.bos],
+                )
+
                 tgt_seq = tgt.cpu().numpy()
                 metrics.update(output_seq, tgt_seq)
-                print(
+                step_stdout = (
                     f"[{now_time()}] Epoch: {epoch} Step: {step} "
                     f"({((step + 1) / len(dataloader)) * 100 : .2f}%), "
                     f"Val Loss: {loss.item()}."
                 )
 
+                self.info(step_stdout)
+
             result = metrics.metric()
             self.metrics.clear()
 
-        result_info = ", ".join([f"Average {k}: {v}" for k, v in result.items()])
-        print(f"[{now_time()}] Val Loss: {loss.item()}.", result_info)
+        result_str = ", ".join([f"{k}: {v}" for k, v in result.items()])
+        epoch_stdout = f"[{now_time()}] Val Loss: {loss.item()}. {result_str}"
+        self.info(epoch_stdout)
 
-    def run(self, epoch_num: int) -> None:
+    def run(self, train_dataloader: DataLoader, val_dataloader: DataLoader, epoch_num: int) -> None:
         for epoch in range(epoch_num):
             self._now_epoch = epoch
-            self.train(self.train_dataloader, self.saver)
-            self.evaluate(self.val_dataloader, self.metrics)
+            self.train(train_dataloader, self.saver)
+            self.evaluate(val_dataloader, self.metrics)
 
         delattr(self, "_now_epoch")
 
