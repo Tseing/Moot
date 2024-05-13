@@ -55,7 +55,7 @@ class Tokenizer(ABC):
         )
 
     def vec_ids2tokens(self, ids: NDArray) -> NDArray:
-        return self.vec_ids2tokens(ids)
+        return self._vec_ids2tokens(ids)
 
     def vec_tokens2ids(self, tokens: NDArray) -> NDArray:
         return self._vec_tokens2ids(tokens)

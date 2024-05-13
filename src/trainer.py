@@ -1,0 +1,144 @@
+import os.path as osp
+
+import torch
+from torch import nn
+from torch.nn.modules.loss import _Loss
+from torch.optim.optimizer import Optimizer
+from torch.utils.data import DataLoader
+
+from .metrics import ModelMetrics
+from .typing import Device
+from .utils import now_time
+
+
+class ModelSaver:
+    def __init__(
+        self,
+        save_dir: str,
+        steps: int,
+        model_name: str = "model",
+        epoch_gap: int = 1,
+        model_num_per_epoch: int = 1,
+        save_in_step_zero: bool = False,
+    ) -> None:
+        self.save_dir = save_dir
+        self.model_name = model_name
+        self.epoch_gap = epoch_gap
+        step_gap = steps // model_num_per_epoch
+        if save_in_step_zero:
+            save_steps = [step_gap * i for i in range(model_num_per_epoch)]
+        else:
+            save_steps = [step_gap * (1 + i) for i in range(model_num_per_epoch)]
+
+        self.save_steps = set(save_steps)
+
+    def monitor(self, model: nn.Module, epoch: int, step: int) -> None:
+        if step in self.save_steps:
+            file_name = f"{self.model_name}_epoch{epoch}_step{step}.pt"
+            torch.save(
+                model.state_dict(),
+                osp.join(self.save_dir, file_name),
+            )
+            print(f"Model '{file_name}' is saved in {self.save_dir}.")
+
+
+class ModelTrainer:
+    def __init__(
+        self,
+        model: nn.Module,
+        optimizer: Optimizer,
+        criterion: _Loss,
+        # TODO: scheduler
+        # scheduler: LRScheduler,
+        device: Device,
+    ) -> None:
+        self.model = model
+        self.optimizer = optimizer
+        self.criterion = criterion
+        # self.scheduler = scheduler
+        self.device = device
+
+    def setup_strategy(
+        self,
+        train_dataloader: DataLoader,
+        val_dataloader: DataLoader,
+        metrics: ModelMetrics,
+        saver: ModelSaver,
+    ) -> None:
+        self.train_dataloader = train_dataloader
+        self.val_dataloader = val_dataloader
+        self.metrics = metrics
+        self.saver = saver
+
+    def train(self, dataloader: DataLoader, saver: ModelSaver):
+        self.model.train()
+        epoch = self.check_now_epoch()
+        epoch_loss = 0
+        for step, (src, tgt) in enumerate(dataloader):
+            src = src.to(self.device)
+            tgt = tgt.to(self.device)
+
+            self.optimizer.zero_grad()
+            output = self.model(src, tgt)
+
+            loss = self.criterion(output.transpose(1, 2), tgt.long())
+            loss.backward()
+            self.optimizer.step()
+
+            epoch_loss += loss.item()
+
+            print(
+                f"[{now_time()}] Epoch: {epoch} Step: {step} "
+                f"({((step + 1) / len(dataloader) * 100, 2)}%), "
+                f"Train Loss: {loss.item()}."
+            )
+
+            saver.monitor(self.model, epoch, step)
+
+    def evaluate(self, dataloader: DataLoader, metrics: ModelMetrics):
+        self.model.eval()
+        epoch = self.check_now_epoch()
+        epoch_loss = 0.0
+
+        with torch.no_grad():
+            for step, (src, tgt) in enumerate(dataloader):
+                src = src.to(self.device)
+                tgt = tgt.to(self.device)
+                output = self.model(src, tgt)
+
+                loss = self.criterion(output.transpose(1, 2), tgt.long())
+                epoch_loss += loss.item()
+
+                output_seq = output.argmax(dim=-1).squeeze().cpu().numpy()
+                tgt_seq = tgt.cpu().numpy()
+                metrics.update(output_seq, tgt_seq)
+                print(
+                    f"[{now_time()}] Epoch: {epoch} Step: {step} "
+                    f"({((step + 1) / len(dataloader)) * 100 : .2f}%), "
+                    f"Val Loss: {loss.item()}."
+                )
+
+            result = metrics.metric()
+            self.metrics.clear()
+
+        result_info = ", ".join([f"Average {k}: {v}" for k, v in result.items()])
+        print(f"[{now_time()}] Val Loss: {loss.item()}.", result_info)
+
+    def run(self, epoch_num: int) -> None:
+        for epoch in range(epoch_num):
+            self._now_epoch = epoch
+            self.train(self.train_dataloader, self.saver)
+            self.evaluate(self.val_dataloader, self.metrics)
+
+        delattr(self, "_now_epoch")
+
+    @property
+    def now_epoch(self):
+        return self._now_epoch
+
+    def check_now_epoch(self) -> int:
+        try:
+            now_epoch = self.now_epoch
+        except AttributeError:
+            now_epoch = 0
+        return now_epoch

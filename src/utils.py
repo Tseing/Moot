@@ -70,9 +70,6 @@ def cal_chrf(hyp: List[str], ref: List[str]) -> float:
 
 
 def cal_similarity(hyp: str, ref: str) -> float:
-    print(f"hyp: '{hyp}'")
-    print(f"ref: '{ref}'")
-
     try:
         hyp_mol = Chem.MolFromSmiles(hyp)
         ref_mol = Chem.MolFromSmiles(ref)

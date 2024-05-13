@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from multiprocessing import Pool
 from typing import Any, Dict, Iterable, List, Tuple
 
 import numpy as np
@@ -34,11 +35,11 @@ class ModelMetrics(ABC):
         refs = self._post_process(refs_array)
 
         if self._show_bar:
-            iterator = tqdm(zip(hyps, refs), total=total)
-        else:
-            iterator = zip(hyps, refs)
+            self._pbar = tqdm(total=total)
 
+        iterator = zip(hyps, refs)
         self.results = self._metrics_pipeline(iterator, total)
+
         return self.results
 
     def clear(self) -> None:
@@ -55,33 +56,43 @@ class ModelMetrics(ABC):
 
 
 class MMPMetrics(ModelMetrics):
-    def __init__(
-        self,
-        tokenizer: MMPTokenizer,
-    ) -> None:
+    def __init__(self, tokenizer: MMPTokenizer, worker: int = 10, show_bar: bool = True) -> None:
         self.tokenizer = tokenizer
-        super().__init__()
+        self.worker = worker
+        super().__init__(show_bar)
 
     def _post_process(self, array: ndarray[Any, np.dtype]) -> List[List[str]]:
         return trim_seqs(array, self.tokenizer)
 
+    @staticmethod
+    def _metrics_proc(hyp: List[str], ref: List[str]) -> Tuple[float, float, float]:
+        hyp_str = "".join(hyp)
+        ref_str = "".join(ref)
+
+        validity = cal_validity(hyp_str)
+        similarity = cal_similarity(hyp_str, ref_str)
+        chrf = cal_chrf(hyp, ref)
+
+        return validity, similarity, chrf
+
     def _metrics_pipeline(
         self, iterator: Iterable[Tuple[List[str], List[str]]], total: int
     ) -> Dict[str, float]:
-        validity = 0.0
-        similarity = 0.0
-        chrf = 0.0
+        with Pool(processes=self.worker) as pool:
+            res = [
+                pool.apply_async(
+                    self._metrics_proc, args=(hyp, ref), callback=lambda *args: self._pbar.update()
+                )
+                for hyp, ref in iterator
+            ]
+            pool.close()
+            pool.join()
 
-        for hyp, ref in iterator:
-            hyp_str = "".join(hyp)
-            ref_str = "".join(ref)
-
-            validity += cal_validity(hyp_str)
-            similarity += cal_similarity(hyp_str, ref_str)
-            chrf += cal_chrf(hyp, ref)
+        res_value = tuple(r.get() for r in res)
+        validity, similarity, chrf = zip(*res_value)
 
         return {
-            "Validity": validity / total,
-            "Similarity": similarity / total,
-            "ChRF": chrf / total,
+            "Validity": sum(validity) / float(total),
+            "Similarity": sum(similarity) / float(total),
+            "ChRF": sum(chrf) / float(total),
         }
