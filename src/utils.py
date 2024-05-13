@@ -1,13 +1,12 @@
 import os.path as osp
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 import torch
 from jaxtyping import Bool, Float, Int
 from nltk.translate.chrf_score import sentence_chrf
 from numpy import ndarray
-from numpy.typing import NDArray
 from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from torch import Tensor, nn
@@ -48,9 +47,9 @@ def check_seq(
     return src_seq_str, output_seq_str
 
 
-def trim_seqs(seqs: Int[ndarray, "bsz seq_len"], tokenizer: StrTokenizer) -> List[NDArray[np.int_]]:
+def trim_seqs(seqs: Int[ndarray, "bsz seq_len"], tokenizer: StrTokenizer) -> List[List[str]]:
     seq_len = seqs.shape[1]
-    seqs = tokenizer.vec_ids2tokens(seqs)
+    token_seqs = tokenizer.vec_ids2tokens(seqs)
     is_eos: Bool[ndarray, "bsz seq_len"] = seqs == tokenizer.eos
     eos_idxes = is_eos.argmax(axis=1)
 
@@ -68,7 +67,7 @@ def trim_seqs(seqs: Int[ndarray, "bsz seq_len"], tokenizer: StrTokenizer) -> Lis
 
     mask = np.logical_and(bos_mask, eos_mask)
 
-    trimmed_seqs = [seq[~mask[i]] for i, seq in enumerate(seqs)]
+    trimmed_seqs = [seq[~mask[i]].tolist() for i, seq in enumerate(token_seqs)]
 
     return trimmed_seqs
 
@@ -78,27 +77,37 @@ def cal_chrf(hyp: List[str], ref: List[str]) -> float:
     return chrf
 
 
-def cal_similarity(hyp: List[str], ref: List[str]) -> float:
-    hyp_str = "".join(hyp)
-    ref_str = "".join(ref)
-
-    print(f"hyp: '{hyp_str}'")
-    print(f"ref: '{ref_str}'")
+def cal_similarity(hyp: str, ref: str) -> float:
+    print(f"hyp: '{hyp}'")
+    print(f"ref: '{ref}'")
 
     try:
-        hyp_mol = Chem.MolFromSmiles(hyp_str)
-        ref_mol = Chem.MolFromSmiles(ref_str)
+        hyp_mol = Chem.MolFromSmiles(hyp)
+        ref_mol = Chem.MolFromSmiles(ref)
     except Exception:
-        similarity = 0
+        similarity = 0.0
 
     if hyp_mol is None or ref_mol is None:
-        similarity = 0
+        similarity = 0.0
     else:
         hyp_fp = AllChem.GetHashedMorganFingerprint(hyp_mol, 3, 2048)
         ref_fp = AllChem.GetHashedMorganFingerprint(ref_mol, 3, 2048)
         similarity = DataStructs.TanimotoSimilarity(hyp_fp, ref_fp)
 
     return similarity
+
+
+def cal_validity(hyp: str) -> float:
+    try:
+        hyp_mol = Chem.MolFromSmiles(hyp)
+    except Exception:
+        validity = 0.0
+    if hyp_mol is None:
+        validity = 0.0
+    else:
+        validity = 1.0
+
+    return validity
 
 
 class ModelSaver:
