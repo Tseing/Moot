@@ -102,9 +102,16 @@ class StrTokenizer(Tokenizer):
 
     def build_word_table(self, seqs: Iterable[str], dump_path: Optional[str] = None) -> List[str]:
         unique_tokens = set()
+        max_tokens_num = 0
         for seq in tqdm(seqs):
-            unique_tokens.update(set(self.find_bald_tokens(seq)))
+            tokens = self.find_bald_tokens(seq)
+            unique_tokens.update(set(tokens))
 
+            tokens_num = len(tokens)
+            if tokens_num > max_tokens_num:
+                max_tokens_num = tokens_num
+
+        print(f"Max number of tokens in a sequence is '{max_tokens_num}'.")
         word_table = sorted(list(unique_tokens))
         if dump_path:
             with open(dump_path, "w", encoding="utf-8") as f:

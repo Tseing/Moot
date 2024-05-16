@@ -5,13 +5,14 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn.modules.loss import _Loss
+from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
 from .metrics import ModelMetrics
+from .tokenizer import StrTokenizer
 from .typing import Device
 from .utils import Log, now_time
-from .tokenizer import StrTokenizer
 
 
 class ModelSaver:
@@ -51,23 +52,26 @@ class ModelTrainer:
         model: nn.Module,
         optimizer: Optimizer,
         criterion: _Loss,
-        # TODO: scheduler
-        # scheduler: LRScheduler,
+        scheduler: LRScheduler,
+        warming_step: int,
         metrics: ModelMetrics,
         saver: ModelSaver,
         tokenizer: StrTokenizer,
         device: Device,
         logger: Optional[Log] = None,
+        step_per_info: int = 10,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
-        # self.scheduler = scheduler
+        self.scheduler = scheduler
+        self.warming_step = warming_step
         self.metrics = metrics
         self.saver = saver
         self.tokenizer = tokenizer
         self.device = device
         self.logger = logger
+        self.step_per_info = step_per_info
 
         if self.logger:
             self.info = lambda stdout: self.logger.info(stdout)
@@ -87,17 +91,22 @@ class ModelTrainer:
 
             loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
             loss.backward()
+
             self.optimizer.step()
+
+            if step + epoch * len(dataloader) > self.warming_step:
+                self.scheduler.step()
 
             epoch_loss += loss.item()
 
-            step_stdout = (
-                f"[{now_time()}] Epoch: {epoch} Step: {step} "
-                f"({(step + 1) / len(dataloader) * 100 : .2f}%), "
-                f"Train Loss: {loss.item()}."
-            )
+            if step % self.step_per_info == 0:
+                step_stdout = (
+                    f"Epoch: {epoch} Step: {step} "
+                    f"({(step + 1) / len(dataloader) * 100:.2f}%), "
+                    f"Train Loss: {loss.item()}, Learning Rate: {self.scheduler.get_last_lr()[0]}."
+                )
 
-            self.info(step_stdout)
+                self.info(step_stdout)
 
             saver.monitor(self.model, epoch, step)
 
@@ -126,13 +135,15 @@ class ModelTrainer:
 
                 tgt_seq = tgt.cpu().numpy()
                 metrics.update(output_seq, tgt_seq)
-                step_stdout = (
-                    f"[{now_time()}] Epoch: {epoch} Step: {step} "
-                    f"({((step + 1) / len(dataloader)) * 100 : .2f}%), "
-                    f"Val Loss: {loss.item()}."
-                )
 
-                self.info(step_stdout)
+                if step % self.step_per_info == 0:
+                    step_stdout = (
+                        f"Epoch: {epoch} Step: {step} "
+                        f"({(step + 1) / len(dataloader) * 100:.2f}%), "
+                        f"Val Loss: {loss.item()}."
+                    )
+
+                    self.info(step_stdout)
 
             result = metrics.metric()
             self.metrics.clear()

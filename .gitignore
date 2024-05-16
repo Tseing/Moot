@@ -1,5 +1,6 @@
 # Custom ignore
 data/*
+log/
 checkpoints/
 *.ipynb
 !data/word_table.yaml

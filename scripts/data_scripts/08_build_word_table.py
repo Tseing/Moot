@@ -14,3 +14,4 @@ if __name__ == "__main__":
     all_str = pd.concat([df["col1_smiles"], df["col2_smiles"]], axis=0, ignore_index=True)
     word_table = tokenizer.build_word_table(all_str, dump_path="../../data/word_table.yaml")
     print(word_table[:30])
+
