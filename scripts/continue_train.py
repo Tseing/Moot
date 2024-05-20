@@ -17,7 +17,7 @@ from src.metrics import MMPMetrics
 from src.model.transformer import Transformer
 from src.tokenizer import MMPTokenizer
 from src.trainer import ModelSaver, ModelTrainer
-from src.utils import Log, count_parameters, initialize_weights
+from src.utils import Log, count_parameters
 
 RDLogger.DisableLog("rdApp.*")
 
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     warming_step = 2000
     weight_decay = 0.0
     batch_size = 64
-    epoch_num = 20
+    epoch_num = 100
 
     max_len = 300
     d_model = 1024
@@ -37,6 +37,9 @@ if __name__ == "__main__":
     dropout = 0.1
     enc_n_layers = 4
     dec_n_layers = 4
+
+    model_path = "../checkpoints/pretrain_100k_smiles/model_epoch19_step2500.pt"
+    initial_epoch = 20
 
     work_name = "pretrain_100k_smiles"
     log_path = f"../log/{work_name}.log"
@@ -85,9 +88,10 @@ if __name__ == "__main__":
         device=device,
     ).to(device)
 
+    model.load_state_dict(torch.load(model_path))
+
     logger.info(f"The model has {count_parameters(model):,} trainable parameters")
     logger.info(model)
-    model.apply(initialize_weights)
 
     optimizer = Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = CosineAnnealingWarmRestarts(
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
 
     metrics = MMPMetrics(tokenizer)
-    saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=5)
+    saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=2)
 
     trainer = ModelTrainer(
         model=model,
@@ -111,5 +115,5 @@ if __name__ == "__main__":
         logger=logger,
         step_per_info=50,
     )
-    # trainer.evaluate(val_dl, metrics)
-    trainer.run(train_dl, val_dl, epoch_num=epoch_num)
+
+    trainer.run(train_dl, val_dl, epoch_num=epoch_num, initial_epoch=initial_epoch)

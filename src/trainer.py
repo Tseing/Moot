@@ -23,7 +23,7 @@ class ModelSaver:
         model_name: str = "model",
         epoch_gap: int = 1,
         model_num_per_epoch: int = 1,
-        save_in_step_zero: bool = False,
+        save_in_step_zero: bool = True,
     ) -> None:
         self.save_dir = save_dir
         self.model_name = model_name
@@ -152,8 +152,15 @@ class ModelTrainer:
         epoch_stdout = f"[{now_time()}] Val Loss: {loss.item()}. {result_str}"
         self.info(epoch_stdout)
 
-    def run(self, train_dataloader: DataLoader, val_dataloader: DataLoader, epoch_num: int) -> None:
+    def run(
+        self,
+        train_dataloader: DataLoader,
+        val_dataloader: DataLoader,
+        epoch_num: int,
+        initial_epoch: int = 0,
+    ) -> None:
         for epoch in range(epoch_num):
+            epoch += initial_epoch
             self._now_epoch = epoch
             self.train(train_dataloader, self.saver)
             self.evaluate(val_dataloader, self.metrics)
