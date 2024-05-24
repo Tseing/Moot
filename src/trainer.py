@@ -1,5 +1,5 @@
 import os.path as osp
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 import torch
@@ -36,11 +36,11 @@ class ModelSaver:
 
         self.save_steps = set(save_steps)
 
-    def monitor(self, model: nn.Module, epoch: int, step: int) -> None:
+    def monitor(self, save_params: Dict[str, Any], epoch: int, step: int) -> None:
         if step in self.save_steps:
             file_name = f"{self.model_name}_epoch{epoch}_step{step}.pt"
             torch.save(
-                model.state_dict(),
+                save_params,
                 osp.join(self.save_dir, file_name),
             )
             print(f"Model '{file_name}' is saved in {self.save_dir}.")
@@ -108,7 +108,15 @@ class ModelTrainer:
 
                 self.info(step_stdout)
 
-            saver.monitor(self.model, epoch, step)
+            saver.monitor(
+                {
+                    "model": self.model.state_dict(),
+                    "optimizer": self.optimizer.state_dict(),
+                    "scheduler": self.scheduler.state_dict(),
+                },
+                epoch,
+                step,
+            )
 
     def evaluate(self, dataloader: DataLoader, metrics: ModelMetrics):
         self.model.eval()

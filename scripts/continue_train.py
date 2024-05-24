@@ -38,7 +38,7 @@ if __name__ == "__main__":
     enc_n_layers = 4
     dec_n_layers = 4
 
-    model_path = "../checkpoints/pretrain_100k_smiles/model_epoch19_step2500.pt"
+    ckpt_path = "../checkpoints/pretrain_100k_smiles/model_epoch19_step2500.pt"
     initial_epoch = 20
 
     work_name = "pretrain_100k_smiles"
@@ -55,6 +55,7 @@ if __name__ == "__main__":
     device = torch.device("npu")
     tokenizer = MMPTokenizer()
     tokenizer.load_word_table(word_table_path)
+    ckpt = torch.load(ckpt_path)
 
     train_dataset = MMPDataset(train_data_path, max_len=max_len, tokenizer=tokenizer)
     val_dataset = MMPDataset(val_data_path, max_len=max_len, tokenizer=tokenizer)
@@ -88,15 +89,18 @@ if __name__ == "__main__":
         device=device,
     ).to(device)
 
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(ckpt["model"])
 
     logger.info(f"The model has {count_parameters(model):,} trainable parameters")
     logger.info(model)
 
     optimizer = Adam(params=model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer.load_state_dict(ckpt["optimizer"])
     scheduler = CosineAnnealingWarmRestarts(
         optimizer=optimizer, T_0=200, T_mult=2, eta_min=min_learning_rate
     )
+    scheduler.load_state_dict(ckpt["scheduler"])
+
     criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
 
     metrics = MMPMetrics(tokenizer)
