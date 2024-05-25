@@ -157,7 +157,7 @@ class ModelTrainer:
             self.metrics.clear()
 
         result_str = ", ".join([f"{k}: {v}" for k, v in result.items()])
-        epoch_stdout = f"[{now_time()}] Val Loss: {loss.item()}. {result_str}"
+        epoch_stdout = f"Epoch: {epoch} Average Val Loss: {loss.item()}. {result_str}"
         self.info(epoch_stdout)
 
     def run(

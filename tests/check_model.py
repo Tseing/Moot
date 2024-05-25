@@ -2,7 +2,6 @@ import sys
 
 sys.path.append("..")
 import torch
-import torch_npu
 from torch.utils.data import DataLoader
 
 from src.dataset import MMPDataset
@@ -10,7 +9,7 @@ from src.model.crafted_transformer import Transformer
 from src.tokenizer import MMPTokenizer
 
 if __name__ == "__main__":
-    device = torch.device("npu")
+    device = torch.device("cpu")
     tokenizer = MMPTokenizer()
     tokenizer.load_word_table("../data/smiles_word_table.yaml")
     dataset = MMPDataset(
