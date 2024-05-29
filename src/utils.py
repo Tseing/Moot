@@ -1,8 +1,12 @@
 import logging
+import os
+import os.path as osp
 import time
-from typing import List, Tuple
+from typing import List, Optional, Tuple, Any
+import argparse
 
 import numpy as np
+import yaml
 from jaxtyping import Bool, Float, Int
 from nltk.translate.chrf_score import sentence_chrf
 from numpy import ndarray
@@ -99,6 +103,7 @@ def cal_validity(hyp: str) -> float:
 
     return validity
 
+
 class Log(logging.Logger):
     def __init__(self, name: str, log_path: str) -> None:
         super().__init__(name)
@@ -121,3 +126,59 @@ class Log(logging.Logger):
 
     def console_on(self) -> None:
         self.addHandler(self.console_handler)
+
+
+class Cfg:
+    def __init__(self, scrip_dir: str = ".") -> None:
+        self._SCRIP_DIR = osp.abspath(scrip_dir)
+        self._TASK_DIR = osp.abspath(osp.join(self._SCRIP_DIR, "tasks"))
+        self._BASE_DIR = osp.abspath(osp.join(self._SCRIP_DIR, ".."))
+        self._DATA_DIR = osp.abspath(osp.join(self._BASE_DIR, "data"))
+        self._LOG_DIR = osp.abspath(osp.join(self._BASE_DIR, "log"))
+        self._CKPT_DIR = osp.abspath(osp.join(self._BASE_DIR, "checkpoints"))
+
+        necessary_dirs = [self._DATA_DIR, self._LOG_DIR, self._CKPT_DIR, self._TASK_DIR]
+        for folder in necessary_dirs:
+            if not osp.exists(folder):
+                os.mkdir(folder)
+
+    def __getattr__(self, name: str) -> Any:
+        return self._cfg[name]
+
+    def __repr__(self) -> str:
+        return "\n".join([": ".join([k, str(self._cfg[k])]) for k in sorted(self._cfg.keys())])
+
+    @property
+    def BASE_DIR(self):
+        return self._BASE_DIR
+
+    @property
+    def DATA_DIR(self):
+        return self._DATA_DIR
+
+    @property
+    def LOG_DIR(self):
+        return self._LOG_DIR
+
+    @property
+    def CKPT_DIR(self):
+        return self._CKPT_DIR
+
+    def _load_cli(self) -> argparse.Namespace:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("cfg_file", type=str, help="Config file.")
+        return parser.parse_args()
+
+    def _load_local(self, cfg_file: str) -> dict:
+        cfg_path = osp.join(self._TASK_DIR, cfg_file)
+        cfg = yaml.load(open(cfg_path, "r", encoding="utf-8"), yaml.FullLoader)
+        assert isinstance(cfg, dict), f"YAML file '{cfg_path}' is not a valid config file."
+        f"Config file should be 'dict' structure, but got {type(cfg)}."
+
+        return cfg
+
+    def parse(self):
+        cli_cfg = self._load_cli()
+        assert cli_cfg is not None, "Cannot fetch any command line config."
+        cfg_file = cli_cfg.cfg_file
+        self._cfg = self._load_local(cfg_file)

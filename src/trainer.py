@@ -59,7 +59,7 @@ class ModelTrainer:
         tokenizer: StrTokenizer,
         device: Device,
         logger: Optional[Log] = None,
-        step_per_info: int = 10,
+        log_frequency: int = 10,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
@@ -71,7 +71,7 @@ class ModelTrainer:
         self.tokenizer = tokenizer
         self.device = device
         self.logger = logger
-        self.step_per_info = step_per_info
+        self.log_frequency = log_frequency
 
         if self.logger:
             self.info = lambda stdout: self.logger.info(stdout)
@@ -99,7 +99,7 @@ class ModelTrainer:
 
             epoch_loss += loss.item()
 
-            if step % self.step_per_info == 0:
+            if step % self.log_frequency == 0:
                 step_stdout = (
                     f"Epoch: {epoch} Step: {step} "
                     f"({(step + 1) / len(dataloader) * 100:.2f}%), "
@@ -144,7 +144,7 @@ class ModelTrainer:
                 tgt_seq = tgt.cpu().numpy()
                 metrics.update(output_seq, tgt_seq)
 
-                if step % self.step_per_info == 0:
+                if step % self.log_frequency == 0:
                     step_stdout = (
                         f"Epoch: {epoch} Step: {step} "
                         f"({(step + 1) / len(dataloader) * 100:.2f}%), "
