@@ -146,10 +146,14 @@ class SmilesTokenizer(StrTokenizer):
 
         super().__init__(pattern)
 
+    def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
+        return [self.bos] + bald_tokens + [self.eos]
 
-class MMPTokenizer(SmilesTokenizer):
+
+class SelfiesTokenizer(StrTokenizer):
     def __init__(self):
-        super().__init__()
+        pattern = "\[.*?\]|\.|{unk}"
+        super().__init__(pattern)
 
     def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
         return [self.bos] + bald_tokens + [self.eos]

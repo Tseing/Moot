@@ -7,7 +7,7 @@ from jaxtyping import Float
 from numpy import ndarray
 from tqdm import tqdm
 
-from .tokenizer import MMPTokenizer
+from .tokenizer import StrTokenizer
 from .utils import cal_chrf, cal_similarity, cal_validity, trim_seqs
 
 
@@ -56,7 +56,7 @@ class ModelMetrics(ABC):
 
 
 class MMPMetrics(ModelMetrics):
-    def __init__(self, tokenizer: MMPTokenizer, worker: int = 10, show_bar: bool = True) -> None:
+    def __init__(self, tokenizer: StrTokenizer, worker: int = 10, show_bar: bool = True) -> None:
         self.tokenizer = tokenizer
         self.worker = worker
         super().__init__(show_bar)

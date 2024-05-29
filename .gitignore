@@ -6,6 +6,7 @@ checkpoints/
 !data/word_table.yaml
 
 # Ascend-compiled
+extra-info/
 kernel_meta/
 kernel_meta_*/
 fusion_result.json

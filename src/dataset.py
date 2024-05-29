@@ -7,7 +7,7 @@ from numpy import ndarray
 from numpy.typing import DTypeLike
 from torch.utils.data import Dataset
 
-from .tokenizer import MMPTokenizer
+from .tokenizer import StrTokenizer
 
 
 class MMPDataset(Dataset):
@@ -15,7 +15,7 @@ class MMPDataset(Dataset):
         self,
         data_path: str,
         max_len: int,
-        tokenizer: MMPTokenizer,
+        tokenizer: StrTokenizer,
         left_pad: bool = False,
         dtype: DTypeLike = np.int32,
         **kwargs,

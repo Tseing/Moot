@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from src.dataset import MMPDataset
 from src.metrics import MMPMetrics
 from src.model.transformer import Transformer
-from src.tokenizer import MMPTokenizer
+from src.tokenizer import SmilesTokenizer
 from src.trainer import ModelSaver, ModelTrainer
 from src.utils import Log, count_parameters
 
@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     logger = Log("train", log_path)
     device = torch.device("npu")
-    tokenizer = MMPTokenizer()
+    tokenizer = SmilesTokenizer()
     tokenizer.load_word_table(word_table_path)
     ckpt = torch.load(ckpt_path)
 

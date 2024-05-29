@@ -3,6 +3,7 @@ import sys
 sys.path.append("..")
 import os
 import os.path as osp
+from typing import Optional
 
 import torch
 import torch_npu
@@ -15,7 +16,7 @@ from torch.utils.data import DataLoader
 from src.dataset import MMPDataset
 from src.metrics import MMPMetrics
 from src.model.crafted_transformer import Transformer
-from src.tokenizer import MMPTokenizer
+from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
 from src.trainer import ModelSaver, ModelTrainer
 from src.utils import Cfg, Log, count_parameters, initialize_weights
 
@@ -32,10 +33,21 @@ if __name__ == "__main__":
         os.mkdir(save_dir)
 
     logger = Log("train", log_path)
-    logger.info(cfg)
+    logger.info(f"Config:\n{repr(cfg)}")
 
     device = torch.device(cfg.device)
-    tokenizer = MMPTokenizer()
+    torch.npu.set_device(device)
+
+    tokenizer: Optional[StrTokenizer] = None
+    if cfg.tokenizer == "SmilesTokenizer":
+        tokenizer = SmilesTokenizer()
+    elif cfg.tokenizer == "SelfiesTokenizer":
+        tokenizer = SelfiesTokenizer()
+    else:
+        assert False, (
+            f"Config 'tokenizer' should be 'SmilesTokenizer' or 'SelfiesTokenizer', "
+            f"but got '{cfg.tokenizer}'."
+        )
     tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
 
     train_dataset = MMPDataset(
@@ -91,7 +103,7 @@ if __name__ == "__main__":
 
     optimizer = Adam(params=model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     scheduler = CosineAnnealingWarmRestarts(
-        optimizer=optimizer, T_0=200, T_mult=2, eta_min=cfg.min_learning_rate
+        optimizer=optimizer, T_0=750, T_mult=2, eta_min=cfg.min_learning_rate
     )
     criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
 

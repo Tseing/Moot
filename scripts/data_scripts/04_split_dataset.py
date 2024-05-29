@@ -58,6 +58,7 @@ class DatasetBuilder:
         ), f"'columns' should be a list only includes 2 columns labels, but got {columns}."
         df = dataset[columns]
         df.columns = ["col1", "col2"]
+        df = df.dropna(how="any")
         df.to_csv(save_path, index=False)
 
         print(f"Dataset '{os.path.abspath(save_path)}' size: {df.shape}")
