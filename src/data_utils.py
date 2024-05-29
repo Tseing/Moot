@@ -4,6 +4,7 @@ import random
 from typing import Any, Optional, Tuple
 
 import pandas as pd
+import selfies as sf
 from rdkit import Chem
 from typing_extensions import TypeAlias
 
@@ -134,6 +135,27 @@ def smiles2smarts(smiles: str) -> Optional[str]:
         return None
 
     return Chem.MolToSmarts(mol)
+
+
+def smiles2selfies(smiles: str) -> Optional[str]:
+    """Convert a SMILES string into SELFIES string.
+
+    Parameters
+    ----------
+    smiles : str
+        Inputted SMILES string.
+
+    Returns
+    -------
+    Optional[str]
+        A SELFIES string or None if inputted SMILES is invalid.
+    """
+    try:
+        selfies = sf.encoder(smiles)
+    except:
+        selfies = None
+
+    return selfies
 
 
 def cal_atoms_num(smiles: str) -> int:

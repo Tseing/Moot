@@ -1,5 +1,6 @@
 import copy
 import os
+import sys
 from typing import Callable, List, Sequence
 
 import numpy as np
@@ -7,11 +8,13 @@ import pandas as pd
 from pandarallel import pandarallel
 from sklearn.model_selection import train_test_split
 
-from src.data_utils import randomize_smiles, smiles2smarts, split_path
+sys.path.append("../..")
+from src.data_utils import randomize_smiles, smiles2selfies, split_path
 
-TRAIN_SIZE = 100000
-VAL_SIZE = 10000
-TEST_SIZE = 10000
+TRAIN_SIZE = 10000000
+VAL_SIZE = 100000
+TEST_SIZE = 1000000
+FOLDER_NAME = "10M_dataset"
 
 
 class DatasetBuilder:
@@ -25,7 +28,7 @@ class DatasetBuilder:
         pandarallel.initialize(nb_workers=workers)
         self._smiles_cols = ["col1_smiles", "col2_smiles"]
         self._rd_smiles_cols = ["col1_rd_smiles", "col2_rd_smiles"]
-        self._smarts_cols = ["col1_smarts", "col2_smarts"]
+        self._selfies_cols = ["col1_selfies", "col2_selfies"]
 
     def create_dataset(self, idx: Sequence[int], save_path: str) -> None:
         df = copy.deepcopy(self.df.iloc[idx])
@@ -35,18 +38,18 @@ class DatasetBuilder:
         save_dir, save_name = split_path(save_path)
         smiles_path = os.path.join(save_dir, f"{save_name}_smiles.csv")
         rd_smiles_path = os.path.join(save_dir, f"{save_name}_rd_smiles.csv")
-        smarts_path = os.path.join(save_dir, f"{save_name}_smarts.csv")
+        selfies_path = os.path.join(save_dir, f"{save_name}_selfies.csv")
 
         self.create_data_by_func(
             df, randomize_smiles, cols_in=self._smiles_cols, cols_out=self._rd_smiles_cols
         )
         self.create_data_by_func(
-            df, smiles2smarts, cols_in=self._smiles_cols, cols_out=self._smarts_cols
+            df, smiles2selfies, cols_in=self._smiles_cols, cols_out=self._selfies_cols
         )
 
         self.dump_dataset(df, self._smiles_cols, smiles_path)
         self.dump_dataset(df, self._rd_smiles_cols, rd_smiles_path)
-        self.dump_dataset(df, self._smarts_cols, smarts_path)
+        self.dump_dataset(df, self._selfies_cols, selfies_path)
 
     @staticmethod
     def dump_dataset(dataset: pd.DataFrame, columns: List[str], save_path: str) -> None:
@@ -79,7 +82,7 @@ if __name__ == "__main__":
     )
     val_idx, test_idx = train_test_split(val_test_idx, test_size=TEST_SIZE, train_size=VAL_SIZE)
 
-    save_dir = os.path.join(data_dir, "100k_dataset")
+    save_dir = os.path.join(data_dir, FOLDER_NAME)
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
 
