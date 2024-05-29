@@ -3,28 +3,29 @@ import sys
 
 import torch
 import torch.nn.functional as F
+from torch import nn
 
 sys.path.append("..")
-from ..src.model.crafted_transformer import IncrementalDecoder
+from ..src.model.crafted_transformer import IncrementalDecoder, Transformer
+from ..src.tokenizer import StrTokenizer
 
 
 class Generator:
     def __init__(
         self,
-        models,
-        vocab_meta,
-        maxlen,
-        beam_size=1,
-        minlen=1,
-        stop_early=True,
-        normalize_scores=True,
+        model: Transformer,
+        tokenizer: StrTokenizer,
+        maxlen: int,
+        beam_size: int = 1,
+        minlen: int = 1,
+        stop_early: bool = True,
+        normalize_scores: bool = True,
         len_penalty=1,
-        unk_penalty=0,
-        retain_dropout=False,
-        sampling=False,
-        sampling_topk=-1,
+        unk_penalty: float = 0,
+        retain_dropout: bool = False,
+        sampling: bool = False,
+        sampling_topk: int = -1,
         sampling_temperature=1,
-        use_amp=False,
     ):
         """Generates translations of a given source sentence.
         Args:
@@ -35,12 +36,13 @@ class Generator:
                 normalized scores.
             normalize_scores: Normalize scores by the length of the output.
         """
-        self.models = models
-        self.pad = vocab_meta["pad"]
-        self.unk = vocab_meta["unk"]
-        self.eos = vocab_meta["eos"]
-        self.vocab_size = vocab_meta["len"]
+        self.model = model
+        self.pad = tokenizer.vocab2index[tokenizer.pad]
+        self.unk = tokenizer.vocab2index[tokenizer.unk]
+        self.eos = tokenizer.vocab2index[tokenizer.eos]
+        self.vocab_size = tokenizer.vocab_size
         self.beam_size = beam_size
+
         self.minlen = minlen
         # max_decoder_len = min(m.max_decoder_positions() for m in self.models)
         # max_decoder_len -= 1  # we define maxlen not including the EOS marker
@@ -54,7 +56,6 @@ class Generator:
         self.sampling = sampling
         self.sampling_topk = sampling_topk
         self.sampling_temperature = sampling_temperature
-        self.use_amp = use_amp
 
     def generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
         """Generate a batch of translations."""
@@ -69,28 +70,25 @@ class Generator:
         beam_size = beam_size if beam_size is not None else self.beam_size
         beam_size = min(beam_size, self.vocab_size - 1)
 
-        encoder_outs = []
-        incremental_states = {}
-        for model in self.models:
-            if not self.retain_dropout:
-                model.eval()
-            if isinstance(model.decoder, IncrementalDecoder):
-                incremental_states[model] = {}
-            else:
-                incremental_states[model] = None
+        if not self.retain_dropout:
+            self.model.eval()
+        if isinstance(self.model.decoder, IncrementalDecoder):
+            incremental_state = {}
+        else:
+            incremental_state = None
 
-            # compute the encoder output for each beam
-            encoder_out = model.encoder(
-                src_tokens.repeat(1, beam_size).view(-1, srclen),
-                src_lengths.expand(beam_size, src_lengths.numel()).t().contiguous().view(-1),
-            )
-            encoder_outs.append(encoder_out)
+        # compute the encoder output for each beam
+        encoder_out, encoder_padding_mask = self.model.encoder(
+            src_tokens.repeat(1, beam_size).view(-1, srclen),
+            src_lengths.expand(beam_size, src_lengths.numel()).t().contiguous().view(-1),
+        )
 
         # initialize buffers
         scores = src_tokens.data.new(bsz * beam_size, maxlen + 1).float().fill_(0)
         scores_buf = scores.clone()
         tokens = src_tokens.data.new(bsz * beam_size, maxlen + 2).fill_(self.pad)
         tokens_buf = tokens.clone()
+        # FIXME: the first token should be bos?
         tokens[:, 0] = self.eos
         attn, attn_buf = None, None
         nonpad_idxs = None
@@ -236,17 +234,15 @@ class Generator:
                     # update beam indices to take into account removed sentences
                     corr = batch_idxs - torch.arange(batch_idxs.numel()).type_as(batch_idxs)
                     reorder_state.view(-1, beam_size).add_(corr.unsqueeze(-1) * beam_size)
-                for i, model in enumerate(self.models):
-                    if isinstance(model.decoder, IncrementalDecoder):
-                        model.decoder.reorder_incremental_state(
-                            incremental_states[model], reorder_state
-                        )
-                    encoder_outs[i] = model.encoder.reorder_encoder_out(
-                        *encoder_outs[i], reorder_state
-                    )
+                # for i, model in enumerate(self.models):
+                if isinstance(self.model.decoder, IncrementalDecoder):
+                    self.model.decoder.reorder_incremental_state(incremental_state, reorder_state)
+                encoder_out, encoder_padding_mask = self.model.encoder.reorder_encoder_out(
+                    encoder_out, encoder_padding_mask, reorder_state
+                )
 
             probs, avg_attn_scores = self._decode(
-                tokens[:, : step + 1], encoder_outs, incremental_states
+                tokens[:, : step + 1], encoder_out, encoder_padding_mask, incremental_state
             )
             if step == 0:
                 # at the first step all hypotheses are equally likely, so use
@@ -485,46 +481,19 @@ class Generator:
 
         return finalized
 
-    def _decode(self, tokens, encoder_outs, incremental_states):
-        if len(self.models) == 1:
-            return self._decode_one(
-                tokens, self.models[0], encoder_outs[0], incremental_states, log_probs=True
-            )
-
-        avg_probs = None
-        avg_attn = None
-        for model, encoder_out in zip(self.models, encoder_outs):
-            probs, attn = self._decode_one(
-                tokens, model, encoder_out, incremental_states, log_probs=False
-            )
-            if avg_probs is None:
-                avg_probs = probs
-            else:
-                avg_probs.add_(probs)
-            if attn is not None:
-                if avg_attn is None:
-                    avg_attn = attn
-                else:
-                    avg_attn.add_(attn)
-        avg_probs.div_(len(self.models))
-        avg_probs.log_()
-        if avg_attn is not None:
-            avg_attn.div_(len(self.models))
-        return avg_probs, avg_attn
-
-    def _decode_one(self, tokens, model, encoder_out, incremental_states, log_probs):
+    def _decode(self, tokens, encoder_out, encoder_padding_mask, incremental_state, log_probs=True):
         with torch.no_grad():
-            if incremental_states[model] is not None:
+            if incremental_state is not None:
                 decoder_out = list(
-                    model.decoder(
+                    self.model.decoder(
                         tokens,
-                        encoder_out[0],
-                        encoder_out[1],
-                        incremental_state=incremental_states[model],
+                        encoder_out,
+                        encoder_padding_mask,
+                        incremental_state=incremental_state,
                     )
                 )
             else:
-                decoder_out = list(model.decoder(tokens, encoder_out[0], encoder_out[1]))
+                decoder_out = list(self.model.decoder(tokens, encoder_out, encoder_padding_mask))
             decoder_out[0] = decoder_out[0][:, -1, :]
             attn = decoder_out[1]
             if isinstance(attn, torch.Tensor) and attn.numel() == 0:

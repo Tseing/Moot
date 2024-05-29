@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from .metrics import ModelMetrics
 from .tokenizer import StrTokenizer
 from .typing import Device
-from .utils import Log, now_time
+from .utils import Log
 
 
 class ModelSaver:
@@ -87,9 +87,9 @@ class ModelTrainer:
             tgt = tgt.to(self.device)
 
             self.optimizer.zero_grad()
-            output = self.model(src, tgt[:, :-1])
+            output, _ = self.model(src, tgt[:, :-1])
 
-            loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
+            loss = self.criterion(output.transpose(1, 2), tgt[:, 1:])
             loss.backward()
 
             self.optimizer.step()
@@ -127,9 +127,9 @@ class ModelTrainer:
             for step, (src, tgt) in enumerate(dataloader):
                 src = src.to(self.device)
                 tgt = tgt.to(self.device)
-                output = self.model(src, tgt[:, :-1])
+                output, _ = self.model(src, tgt[:, :-1])
 
-                loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
+                loss = self.criterion(output.transpose(1, 2), tgt[:, 1:])
                 epoch_loss += loss.item()
 
                 output_seq = output.argmax(dim=-1).cpu().numpy()

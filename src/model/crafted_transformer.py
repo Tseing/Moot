@@ -7,8 +7,9 @@ import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
-from .modules import MultiheadAttention, SinusoidalPositionalEmbedding
 from ..typing import Device
+from .modules import MultiheadAttention, SinusoidalPositionalEmbedding
+
 
 class Transformer(nn.Module):
 
@@ -125,7 +126,7 @@ class TransformerEncoder(nn.Module):
         relu_dropout: float,
         attn_dropout: float,
         device=Device,
-        left_pad: bool = False,
+        left_pad: bool = True,
         seed=0,
     ) -> None:
         super().__init__()
@@ -191,14 +192,14 @@ class TransformerEncoder(nn.Module):
         # x.shape == T x B x C, encoder_padding_mask.shape == B x T
         return x, encoder_padding_mask
 
-    # def reorder_encoder_out(self, encoder_out, encoder_padding_mask, new_order):
-    #     if encoder_out is not None:
-    #         encoder_out = encoder_out.index_select(1, new_order)
-    #     if encoder_padding_mask is not None:
-    #         encoder_padding_mask = encoder_padding_mask.int()
-    #         encoder_padding_mask = encoder_padding_mask.index_select(0, new_order)
-    #         encoder_padding_mask = encoder_padding_mask.bool()
-    #     return encoder_out, encoder_padding_mask
+    def reorder_encoder_out(self, encoder_out, encoder_padding_mask, new_order):
+        if encoder_out is not None:
+            encoder_out = encoder_out.index_select(1, new_order)
+        if encoder_padding_mask is not None:
+            encoder_padding_mask = encoder_padding_mask.int()
+            encoder_padding_mask = encoder_padding_mask.index_select(0, new_order)
+            encoder_padding_mask = encoder_padding_mask.bool()
+        return encoder_out, encoder_padding_mask
 
 
 class IncrementalDecoder(nn.Module):
