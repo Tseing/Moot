@@ -8,7 +8,14 @@ from numpy import ndarray
 from tqdm import tqdm
 
 from .tokenizer import StrTokenizer
-from .utils import cal_chrf, cal_similarity, cal_validity, trim_seqs
+from .utils import (
+    cal_chrf,
+    cal_selfies_similarity,
+    cal_selfies_validity,
+    cal_smiles_similarity,
+    cal_smiles_validity,
+    trim_seqs,
+)
 
 
 class ModelMetrics(ABC):
@@ -55,7 +62,7 @@ class ModelMetrics(ABC):
         assert False, "Abstract method `_metrics_pipeline` has not yet initialized."
 
 
-class MMPMetrics(ModelMetrics):
+class SmilesMetrics(ModelMetrics):
     def __init__(self, tokenizer: StrTokenizer, worker: int = 10, show_bar: bool = True) -> None:
         self.tokenizer = tokenizer
         self.worker = worker
@@ -69,8 +76,8 @@ class MMPMetrics(ModelMetrics):
         hyp_str = "".join(hyp)
         ref_str = "".join(ref)
 
-        validity = cal_validity(hyp_str)
-        similarity = cal_similarity(hyp_str, ref_str)
+        validity = cal_smiles_validity(hyp_str)
+        similarity = cal_smiles_similarity(hyp_str, ref_str)
         chrf = cal_chrf(hyp, ref)
 
         return validity, similarity, chrf
@@ -96,3 +103,15 @@ class MMPMetrics(ModelMetrics):
             "Similarity": sum(similarity) / float(total),
             "ChRF": sum(chrf) / float(total),
         }
+
+class SelfiesMetrics(SmilesMetrics):
+    @staticmethod
+    def _metrics_proc(hyp: List[str], ref: List[str]) -> Tuple[float, float, float]:
+        hyp_str = "".join(hyp)
+        ref_str = "".join(ref)
+
+        validity = cal_selfies_validity(hyp_str)
+        similarity = cal_selfies_similarity(hyp_str, ref_str)
+        chrf = cal_chrf(hyp, ref)
+
+        return validity, similarity, chrf

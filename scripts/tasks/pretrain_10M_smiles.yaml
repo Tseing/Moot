@@ -4,7 +4,7 @@ device: "npu:2"
 train_data_path: "1bond/10M_dataset/train_smiles.csv"
 val_data_path: "1bond/10M_dataset/val_smiles.csv"
 word_table_path: "smiles_word_table.yaml"
-tokenizer: "SmilesTokenizer"
+data_format: "SMILES"
 
 # train
 learning_rate: 5.0e-4
@@ -13,7 +13,7 @@ warming_step: 5000
 weight_decay: 1.0e-5
 batch_size: 128
 epoch_num: 100
-log_frequency: 50
+log_interval: 50
 seed: 42
 
 # model

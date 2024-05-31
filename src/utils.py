@@ -1,11 +1,12 @@
+import argparse
 import logging
 import os
 import os.path as osp
 import time
-from typing import List, Optional, Tuple, Any
-import argparse
+from typing import Any, List, Tuple
 
 import numpy as np
+import selfies as sf
 import yaml
 from jaxtyping import Bool, Float, Int
 from nltk.translate.chrf_score import sentence_chrf
@@ -74,12 +75,13 @@ def cal_chrf(hyp: List[str], ref: List[str]) -> float:
     return chrf
 
 
-def cal_similarity(hyp: str, ref: str) -> float:
+def cal_smiles_similarity(hyp: str, ref: str) -> float:
     try:
         hyp_mol = Chem.MolFromSmiles(hyp)
         ref_mol = Chem.MolFromSmiles(ref)
     except Exception:
         similarity = 0.0
+        return similarity
 
     if hyp_mol is None or ref_mol is None:
         similarity = 0.0
@@ -91,17 +93,40 @@ def cal_similarity(hyp: str, ref: str) -> float:
     return similarity
 
 
-def cal_validity(hyp: str) -> float:
+def cal_selfies_similarity(hyp: str, ref: str) -> float:
+    try:
+        hyp_smi = sf.decoder(hyp)
+        ref_smi = sf.decoder(ref)
+    except Exception:
+        similarity = 0.0
+        return similarity
+
+    return cal_smiles_similarity(hyp_smi, ref_smi)
+
+
+def cal_smiles_validity(hyp: str) -> float:
     try:
         hyp_mol = Chem.MolFromSmiles(hyp)
     except Exception:
         validity = 0.0
+        return validity
+
     if hyp_mol is None:
         validity = 0.0
     else:
         validity = 1.0
 
     return validity
+
+
+def cal_selfies_validity(hyp: str) -> float:
+    try:
+        hyp_smi = sf.decoder(hyp)
+    except Exception:
+        validity = 0.0
+        return validity
+
+    return cal_smiles_validity(hyp_smi)
 
 
 class Log(logging.Logger):

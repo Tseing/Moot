@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 
 from src.dataset import MMPDataset
-from src.metrics import MMPMetrics
+from src.metrics import SelfiesMetrics, SmilesMetrics
 from src.model.crafted_transformer import Transformer
 from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
 from src.trainer import ModelSaver, ModelTrainer
@@ -39,14 +39,13 @@ if __name__ == "__main__":
     torch.npu.set_device(device)
 
     tokenizer: Optional[StrTokenizer] = None
-    if cfg.tokenizer == "SmilesTokenizer":
+    if cfg.data_format == "SMILES":
         tokenizer = SmilesTokenizer()
-    elif cfg.tokenizer == "SelfiesTokenizer":
+    elif cfg.data_format == "SELFIES":
         tokenizer = SelfiesTokenizer()
     else:
         assert False, (
-            f"Config 'tokenizer' should be 'SmilesTokenizer' or 'SelfiesTokenizer', "
-            f"but got '{cfg.tokenizer}'."
+            f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
         )
     tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
 
@@ -107,7 +106,15 @@ if __name__ == "__main__":
     )
     criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
 
-    metrics = MMPMetrics(tokenizer)
+    if cfg.data_format == "SMILES":
+        metrics = SmilesMetrics(tokenizer)
+    elif cfg.data_format == "SELFIES":
+        metrics = SelfiesMetrics(tokenizer)
+    else:
+        assert False, (
+            f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
+        )
+
     saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=2)
 
     trainer = ModelTrainer(
@@ -121,7 +128,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         device=device,
         logger=logger,
-        log_frequency=cfg.log_frequency,
+        log_interval=cfg.log_interval,
     )
 
     trainer.run(train_dl, val_dl, epoch_num=cfg.epoch_num)
