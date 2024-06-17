@@ -32,7 +32,7 @@ class Transformer(nn.Module):
         vocab_size: int,
         padding_idx: int,
         max_len: int = 512,
-        device: Optional[Device]=None,
+        device: Optional[Device] = None,
         seed=0,
     ):
         super().__init__()
@@ -104,7 +104,9 @@ class Transformer(nn.Module):
         self.eval()
         self.train = train
 
-    def forward(self, src_tokens: Int[Tensor, "bsz seq_len"], prev_output_tokens: Int[Tensor, "bsz seq_len"]):
+    def forward(
+        self, src_tokens: Int[Tensor, "bsz seq_len"], prev_output_tokens: Int[Tensor, "bsz seq_len"]
+    ):
 
         encoder_out, padding_mask = self.encoder(src_tokens)
         decoder_out = self.decoder(prev_output_tokens, encoder_out, padding_mask)
@@ -145,16 +147,6 @@ class TransformerEncoder(nn.Module):
             left_pad=left_pad,
         )
         self.embed_dropout = embed_dropout
-
-        self.layers = nn.ModuleList([])
-        self.layers.extend(
-            [
-                TransformerDecoderLayer(
-                    d_model, n_head, d_ffn, dropout, attn_dropout, relu_dropout, device, seed
-                )
-                for _ in range(n_layer)
-            ]
-        )
 
         self.layers = nn.ModuleList([])
         self.layers.extend(
@@ -360,7 +352,9 @@ class TransformerEncoderLayer(nn.Module):
     ):
         super().__init__()
 
-        self.self_attn = MultiheadAttention(d_model, n_head, dropout=attn_dropout, device=device, seed=seed)
+        self.self_attn = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
         self.dropout = dropout
         self.relu_dropout = relu_dropout
         self.fc1 = Linear(d_model, d_ffn)
@@ -412,12 +406,16 @@ class TransformerDecoderLayer(nn.Module):
     ):
         super().__init__()
 
-        self.self_attn = MultiheadAttention(d_model, n_head, dropout=attn_dropout, device=device, seed=seed)
+        self.self_attn = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
         self.dropout = dropout
         self.relu_dropout = relu_dropout
         self.self_attn_layer_norm = nn.LayerNorm(d_model)
 
-        self.encoder_attn = MultiheadAttention(d_model, n_head, dropout=attn_dropout,device=device, seed=seed)
+        self.encoder_attn = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
         self.encoder_attn_layer_norm = nn.LayerNorm(d_model)
 
         self.fc1 = Linear(d_model, d_ffn)
