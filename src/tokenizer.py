@@ -7,9 +7,14 @@ import numpy as np
 import yaml
 from numpy.typing import NDArray
 from tqdm import tqdm
+from typing_extensions import TypeAlias
+
+Tokenizer: TypeAlias = Union[
+    "StrTokenizer", "SmilesTokenizer", "SelfiesTokenizer", "ProteinTokenizer"
+]
 
 
-class Tokenizer(ABC):
+class BaseTokenizer(ABC):
     def __init__(self, special_tokens: Optional[List[str]] = None):
         self.pad = "{pad}"
         self.unk = "{unk}"
@@ -26,7 +31,9 @@ class Tokenizer(ABC):
             word_table = yaml.safe_load(f)
 
         self.word_table: List[str] = self.special_tokens + word_table
+        self.update_vocab()
 
+    def update_vocab(self) -> None:
         self.vocab2index = {w: i for i, w in enumerate(self.word_table)}
         self.vocab2token = {i: w for i, w in enumerate(self.word_table)}
         self.vocab_size = len(self.word_table)
@@ -91,7 +98,7 @@ class Tokenizer(ABC):
         return tokens
 
 
-class StrTokenizer(Tokenizer):
+class StrTokenizer(BaseTokenizer):
     def __init__(self, pattern: str):
         self.bos = "{bos}"
         self.eos = "{eos}"
@@ -157,3 +164,59 @@ class SelfiesTokenizer(StrTokenizer):
 
     def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
         return [self.bos] + bald_tokens + [self.eos]
+
+
+class ProteinTokenizer(StrTokenizer):
+    def __init__(self):
+        pattern = "-[A|R|N|D|C|Q|E|G|H|I|L|K|M|F|P|S|T|W|Y|V|X]|{unk}"
+        super().__init__(pattern)
+        word_table = [
+            "-A",
+            "-R",
+            "-N",
+            "-D",
+            "-C",
+            "-Q",
+            "-E",
+            "-G",
+            "-H",
+            "-I",
+            "-L",
+            "-K",
+            "-M",
+            "-F",
+            "-P",
+            "-S",
+            "-T",
+            "-W",
+            "-Y",
+            "-V",
+            "-X",
+        ]
+        self.word_table = self.special_tokens + word_table
+        self.update_vocab()
+
+    def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
+        return [self.bos] + bald_tokens + [self.eos]
+
+
+def share_vocab(*args: Tokenizer) -> Tuple[Tokenizer, ...]:
+    tokenizers = copy.deepcopy(args)
+    special_tokens = tokenizers[0].special_tokens
+
+    for tokenizer in tokenizers:
+        assert special_tokens == tokenizer.special_tokens, (
+            "Tokenizers with different special tokens cannot share vocab."
+            f"'{tokenizers[0]}': '{special_tokens}'"
+            f"'{tokenizer}': '{tokenizer.special_tokens}'"
+        )
+
+    merged_vocab = [token for tokenizer in tokenizers for token in tokenizer.word_table]
+    shared_vocab = list(set(merged_vocab))
+    shared_vocab.sort(key=merged_vocab.index)
+
+    for tokenizer in tokenizers:
+        tokenizer.word_table = shared_vocab
+        tokenizer.update_vocab()
+
+    return tokenizers
