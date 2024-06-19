@@ -79,11 +79,11 @@ def canonicalize_smiles(smiles: str) -> Optional[str]:
     Optional[str]
         A canonical SMILES or None if inputted SMILES is invalid.
     """
-    mol = read_smiles(smiles)
-    if mol is None:
+    try:
+        smiles = Chem.CanonSmiles(smiles)
+        return smiles
+    except:
         return None
-    else:
-        return Chem.MolToSmiles(mol, isomericSmiles=True)
 
 
 def randomize_smiles(smiles: str, random_type: str = "restricted") -> Optional[str]:
