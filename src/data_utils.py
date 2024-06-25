@@ -1,11 +1,12 @@
 import copy
 import os
 import random
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import pandas as pd
 import selfies as sf
 from rdkit import Chem
+from rdkit.Chem import Descriptors, rdFMCS
 from typing_extensions import TypeAlias
 
 Mol: TypeAlias = Chem.rdchem.Mol
@@ -174,3 +175,49 @@ def cal_atoms_num(smiles: str) -> int:
     mol = Chem.MolFromSmiles(smiles)
     mol = Chem.AddHs(mol)
     return mol.GetNumAtoms()
+
+
+def cal_mol_weight(smiles: str) -> float:
+    """_summary_
+
+    Calculate molecular weight.
+    ----------
+    smiles : str
+        Inputted SMILES string.
+
+    Returns
+    -------
+    float
+        Molecular weight.
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    mw = Descriptors.MolWt(mol)
+    return mw
+
+
+def is_1bond_mmp(smiles_a: str, smiles_b: str) -> bool:
+    """Judge whether 2 SMILES strings are Matched Molecular Pair or not.
+
+    Parameters
+    ----------
+    smiles_a : str
+        Inputted SMILES string A.
+    smiles_b : str
+        Inputted SMILES string B.
+
+    Returns
+    -------
+    bool
+        Whether 2 SMILES strings are Matched Molecular Pair or not.
+    """
+    mol_a = Chem.MolFromSmiles(smiles_a)
+    mol_b = Chem.MolFromSmiles(smiles_b)
+    mcs = rdFMCS.FindMCS([mol_a, mol_b])
+    m_cut_a = Chem.ReplaceCore(mol_a, mcs)
+    m_cut_b = Chem.ReplaceCore(mol_b, mcs)
+    num_dummy_a = sum([True if atom.GetAtomicNum() == 0 else False for atom in m_cut_a.GetAtoms()])
+    num_dummy_b = sum([True if atom.GetAtomicNum() == 0 else False for atom in m_cut_b.GetAtoms()])
+    if 1 == num_dummy_a and 1 == num_dummy_b:
+        return True
+    else:
+        return False
