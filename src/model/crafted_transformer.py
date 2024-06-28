@@ -360,8 +360,8 @@ class TransformerEncoderLayer(nn.Module):
         self.fc1 = Linear(d_model, d_ffn)
         self.fc2 = Linear(d_ffn, d_model)
 
-        self.ln1 = nn.LayerNorm(d_model)
-        self.ln2 = nn.LayerNorm(d_model)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
 
     def forward(self, x: Tensor, encoder_padding_mask: Bool[Tensor, "bsz seq_len"]):
         residual = x
@@ -378,7 +378,7 @@ class TransformerEncoderLayer(nn.Module):
         )
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = residual + x
-        x = self.ln1(x)
+        x = self.norm1(x)
 
         residual = x
         x = F.threshold(self.fc1(x), 0.0, 0.0)
@@ -386,7 +386,7 @@ class TransformerEncoderLayer(nn.Module):
         x = self.fc2(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = residual + x
-        x = self.ln2(x)
+        x = self.norm2(x)
         return x
 
 
@@ -478,6 +478,265 @@ class TransformerDecoderLayer(nn.Module):
 
     def make_generation_fast_(self, need_attn=False, **kwargs):
         self.need_attn = need_attn
+
+
+class OptFormerEncoder(nn.Module):
+    def __init__(
+        self,
+        embedding: nn.Embedding,
+        max_len: int,
+        n_head: int,
+        n_layer: int,
+        d_ffn: int,
+        dropout: float,
+        embed_dropout: float,
+        relu_dropout: float,
+        attn_dropout: float,
+        device=Device,
+        left_pad: bool = True,
+        seed=0,
+    ) -> None:
+        super().__init__()
+
+        d_model = embedding.embedding_dim
+        padding_idx = embedding.padding_idx
+        assert padding_idx is not None, f"'padding_idx' of {embedding} is None."
+        self.padding_idx = padding_idx
+
+        self.embedding = embedding
+        self.embed_scale = math.sqrt(d_model)
+        self.embed_positions = PositionalEmbedding(
+            max_len,
+            d_model,
+            padding_idx,
+            left_pad=left_pad,
+        )
+        self.embed_dropout = embed_dropout
+
+        self.layers = nn.ModuleList([])
+        self.layers.extend(
+            [
+                OptFormerEncoderLayer(
+                    d_model, n_head, d_ffn, dropout, attn_dropout, relu_dropout, device, seed
+                )
+                for _ in range(n_layer)
+            ]
+        )
+
+    def compute_padding_mask(self, inp: Tensor) -> Optional[Tensor]:
+        padding_mask = inp.eq(self.padding_idx)
+        if not padding_mask.any():
+            _padding_mask = None
+        else:
+            _padding_mask = padding_mask
+
+        return _padding_mask
+
+    def forward(
+        self,
+        encoder_inp_a: Int[Tensor, "bsz seq_len_a"],
+        encoder_inp_b: Int[Tensor, "bsz seq_len_b"],
+    ) -> Tuple[
+        Float[Tensor, "seq_len_a bsz d_model"],
+        Float[Tensor, "seq_len_b bsz d_model"],
+        Optional[Bool[Tensor, "bsz seq_len_a"]],
+        Optional[Bool[Tensor, "bsz seq_len_b"]]
+    ]:
+        x_a = self.embed_scale * self.embedding(encoder_inp_a)
+        if self.embed_positions is not None:
+            x_a += self.embed_positions(encoder_inp_a)
+
+        x_b = encoder_inp_b
+
+        x_a = F.dropout(x_a, p=self.embed_dropout, training=self.training)
+        x_b = F.dropout(x_b, p=self.embed_dropout, training=self.training)
+
+        # B:batch size ; T: seq length ; C: embedding dim 512
+        # B x T x C -> T x B x C
+        x_a = x_a.transpose(0, 1)
+        x_b = x_b.transpose(0, 1)
+
+        # compute padding mask
+        x_a_padding_mask = self.compute_padding_mask(x_a)
+        x_b_padding_mask = self.compute_padding_mask(x_b)
+
+        # encoder layers
+        for layer in self.layers:
+            x_a, x_b = layer(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
+
+        # x.shape == T x B x C, encoder_padding_mask.shape == B x T
+        return x_a, x_b, x_a_padding_mask, x_b_padding_mask
+
+    def reorder_encoder_out(self, encoder_out, encoder_padding_mask, new_order):
+        if encoder_out is not None:
+            encoder_out = encoder_out.index_select(1, new_order)
+        if encoder_padding_mask is not None:
+            encoder_padding_mask = encoder_padding_mask.int()
+            encoder_padding_mask = encoder_padding_mask.index_select(0, new_order)
+            encoder_padding_mask = encoder_padding_mask.bool()
+        return encoder_out, encoder_padding_mask
+
+
+class OptFormerEncoderLayer(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        n_head: int,
+        d_ffn: int,
+        dropout: float,
+        attn_dropout: float,
+        relu_dropout: float,
+        device: Device,
+        seed=0,
+    ):
+        super().__init__()
+        self.dropout = dropout
+        self.relu_dropout = relu_dropout
+
+        self.self_attn_a = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
+        self.self_attn_b = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
+
+        self.norm_a1 = nn.LayerNorm(d_model)
+        self.norm_b1 = nn.LayerNorm(d_model)
+
+        self.cross_attn = CrossAttnLayer(
+            d_model, n_head, attn_dropout=attn_dropout, device=device, seed=seed
+        )
+
+        self.norm_a2 = nn.LayerNorm(d_model)
+        self.norm_b2 = nn.LayerNorm(d_model)
+
+        self.ffn_a1 = Linear(d_model, d_ffn)
+        self.ffn_a2 = Linear(d_ffn, d_model)
+        self.ffn_b1 = Linear(d_model, d_ffn)
+        self.ffn_b2 = Linear(d_ffn, d_model)
+
+        self.norm_a3 = nn.LayerNorm(d_model)
+        self.norm_b3 = nn.LayerNorm(d_model)
+
+    def __forward_self_attn(
+        self,
+        x: Tensor,
+        key_padding_mask: Bool[Tensor, "bsz seq_len"],
+        self_attn_layer: MultiheadAttention,
+        norm_layer: nn.LayerNorm,
+    ) -> Float[Tensor, "bsz seq_len d"]:
+        residual = x
+        x, _ = self_attn_layer(
+            query=x,
+            key=x,
+            value=x,
+            mask_future_timesteps=False,
+            key_padding_mask=key_padding_mask,
+            incremental_state=None,
+            need_weights=False,
+            static_kv=False,
+        )
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = residual + x
+        x = norm_layer(x)
+        return x
+
+    def __forward_post_cross_attn(
+        self,
+        x: Float[Tensor, "bsz seq_len d"],
+        residual: Float[Tensor, "bsz seq_len d"],
+        norm_layer_pre_ffn: nn.LayerNorm,
+        ffn_1: nn.Linear,
+        ffn_2: nn.Linear,
+        norm_layer_post_ffn: nn.LayerNorm,
+    ) -> Float[Tensor, "bsz seq_len d"]:
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = residual + x
+        x = norm_layer_pre_ffn(x)
+
+        residual = x
+        x = F.threshold(ffn_1(x), 0.0, 0.0)
+        x = F.dropout(x, p=self.relu_dropout, training=self.training)
+        x = ffn_2(x)
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = residual + x
+        x = norm_layer_post_ffn(x)
+        return x
+
+    def forward(
+        self,
+        x_a: Tensor,
+        x_a_padding_mask: Bool[Tensor, "bsz seq_len_a"],
+        x_b: Tensor,
+        x_b_padding_mask: Bool[Tensor, "bsz seq_len_b"],
+    ) -> Tuple[Float[Tensor, "bsz seq_len_a d"], Float[Tensor, "bsz seq_len_b d"]]:
+        x_a = self.__forward_self_attn(
+            x_a,
+            x_a_padding_mask,
+            self.self_attn_a,
+            self.norm_a1,
+        )
+        x_b = self.__forward_self_attn(
+            x_b,
+            x_b_padding_mask,
+            self.self_attn_b,
+            self.norm_b1,
+        )
+        residual_a, residual_b = x_a, x_b
+        x_a, x_b = self.cross_attn(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
+        x_a = self.__forward_post_cross_attn(
+            x_a, residual_a, self.norm_a2, self.ffn_a1, self.ffn_a2, self.norm_a3
+        )
+        x_b = self.__forward_post_cross_attn(
+            x_b, residual_b, self.norm_b2, self.ffn_b1, self.ffn_b2, self.norm_b3
+        )
+
+        return x_a, x_b
+
+
+class CrossAttnLayer(nn.Module):
+    def __init__(
+        self, d_model: int, n_head: int, attn_dropout: float, device: Device, seed: int = 0
+    ) -> None:
+        super().__init__()
+
+        self.cross_attn_a = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
+        self.cross_attn_b = MultiheadAttention(
+            d_model, n_head, dropout=attn_dropout, device=device, seed=seed
+        )
+
+    def forward(
+        self,
+        x_a: Tensor,
+        x_a_padding_mask: Bool[Tensor, "bsz seq_len1"],
+        x_b: Tensor,
+        x_b_padding_mask: Bool[Tensor, "bsz seq_len2"],
+    ) -> Tuple[Float[Tensor, "seq_len1 d"], Float[Tensor, "seq_len2 d"]]:
+        attn_a, _ = self.cross_attn1(
+            query=x_a,
+            key=x_b,
+            value=x_b,
+            mask_future_timesteps=False,
+            key_padding_mask=x_b_padding_mask,
+            incremental_state=None,
+            need_weights=False,
+            static_kv=False,
+        )
+
+        attn_b, _ = self.cross_attn2(
+            query=x_b,
+            key=x_a,
+            value=x_a,
+            mask_future_timesteps=False,
+            key_padding_mask=x_a_padding_mask,
+            incremental_state=None,
+            need_weights=False,
+            static_kv=False,
+        )
+
+        return attn_a, attn_b
 
 
 def Embedding(num_embeddings: int, embedding_dim: int, padding_idx: int) -> nn.Embedding:
