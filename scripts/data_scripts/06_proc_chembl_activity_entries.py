@@ -1,12 +1,12 @@
 import os.path as osp
-import pickle
-from typing import List, Tuple
 import sys
+from typing import List, Tuple
+
 import pandas as pd
 from pandarallel import pandarallel
 
 sys.path.append("../..")
-from src.data_utils import cal_mol_weight
+from src.data_utils import SMILESDict, cal_mol_weight
 
 
 def stats_unit(df_path: str) -> None:
@@ -54,39 +54,6 @@ def fetch_unstd_unit_value(df_path: str, unstd_units: List[Tuple[str, str]]) -> 
     unstd_df["mol_chembl_id"].dropna().drop_duplicates().to_csv(
         osp.join(df_dir, "unstd_unique_mol_chembl_id.csv"), index=False
     )
-
-
-class SMILESDict:
-    def __init__(self, path: str) -> None:
-        file_name, file_ext = osp.splitext(path)
-
-        if file_ext == ".pkl":
-            self.load_pkl(path)
-        elif file_ext == ".csv":
-            self.read_csv(path)
-        else:
-            assert False, f"Only support '.pkl' and '.csv' file, but got '{file_ext}'."
-
-        self.dump_path = f"{file_name}.pkl"
-
-    def __getitem__(self, key: str):
-        return self.d[key]
-
-    def read_csv(self, csv_path: str):
-        df = pd.read_csv(csv_path)
-        df.drop_duplicates(subset="chembl_id", inplace=True)
-        self.d = dict(zip(df["chembl_id"], df["smiles"]))
-        self._const_lookup_func()
-
-    def load_pkl(self, path: str) -> None:
-        self.d = pickle.load(open(path, "rb"))
-        self._const_lookup_func()
-
-    def dump(self):
-        pickle.dump(self.d, open(self.dump_path, "wb"))
-
-    def _const_lookup_func(self) -> None:
-        self.lookup_smiles = lambda chembl_id: self[chembl_id]
 
 
 def standardize_ug_mL(df_path: str) -> None:

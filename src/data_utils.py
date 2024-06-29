@@ -1,5 +1,6 @@
-import copy
 import os
+import os.path as osp
+import pickle
 import random
 from typing import Optional, Tuple
 
@@ -10,21 +11,6 @@ from rdkit.Chem import Descriptors, rdFMCS
 from typing_extensions import TypeAlias
 
 Mol: TypeAlias = Chem.rdchem.Mol
-
-
-def generate_unique_id(dataframe: pd.DataFrame, return_df: bool = False) -> Optional[pd.DataFrame]:
-    df = copy.deepcopy(dataframe)
-    df.columns = ["col1", "col2"]
-    print(f"Original size: {df.shape}")
-
-    unique_id = set(df["col1"].drop_duplicates().tolist())
-    unique_id = unique_id.union(set(df["col2"].drop_duplicates().tolist()))
-    print(f"Unique ID num: {len(unique_id)}")
-
-    if return_df:
-        return pd.DataFrame({"chembl_id": sorted(list(unique_id))})
-    else:
-        return None
 
 
 def split_path(path: str) -> Tuple[str, str]:
@@ -221,3 +207,70 @@ def is_1bond_mmp(smiles_a: str, smiles_b: str) -> bool:
         return True
     else:
         return False
+
+
+class LookupDict:
+    def __init__(self, path: str, cols: Optional[Tuple[str, str]] = None) -> None:
+        file_name, file_ext = osp.splitext(path)
+
+        if file_ext == ".pkl":
+            self._load_pkl(path)
+        elif file_ext == ".csv":
+            self._read_csv(path, cols)
+        else:
+            assert False, f"Only support '.pkl' and '.csv' file, but got '{file_ext}'."
+
+        self.dump_path = f"{file_name}.pkl"
+
+    def __repr__(self) -> str:
+        return self.d.__repr__()
+
+    def __getitem__(self, key: str):
+        return self.d[key]
+
+    def _read_csv(self, csv_path: str, cols: Optional[Tuple[str, str]]) -> None:
+        df = pd.read_csv(csv_path, usecols=cols)
+        self._read_df(df, cols)
+
+    def _read_df(self, df: pd.DataFrame, cols: Optional[Tuple[str, str]]) -> None:
+        assert (
+            df.shape[1] == 2
+        ), "DataFrame contains columns more than 2. Please specify attribute 'cols'."
+
+        if cols is None:
+            k_col, v_col = df.columns
+        else:
+            k_col, v_col = cols
+
+        df.drop_duplicates(inplace=True)
+        self.d = dict(zip(df[k_col], df[v_col]))
+        self._const_lookup_func()
+
+    def _load_pkl(self, path: str) -> None:
+        self.d = pickle.load(open(path, "rb"))
+        self._const_lookup_func()
+
+    def dump(self):
+        pickle.dump(self.d, open(self.dump_path, "wb"))
+
+    def _const_lookup_func(self) -> None:
+        self._lookup = lambda k: self[k]
+
+    @property
+    def lookup(self):
+        return self._lookup
+
+
+class SMILESDict(LookupDict):
+    def __init__(self, path: str, cols: Optional[Tuple[str, str]] = None) -> None:
+        super().__init__(path, cols)
+
+    def _read_csv(
+        self, csv_path: str, cols: Optional[Tuple[str, str]] = ("chembl_id", "smiles")
+    ) -> None:
+        return super()._read_csv(csv_path, cols)
+
+    def _read_df(
+        self, df: pd.DataFrame, cols: Optional[Tuple[str, str]] = ("chembl_id", "smiles")
+    ) -> None:
+        return super()._read_df(df, cols)

@@ -2,6 +2,7 @@
 data/*
 log/
 checkpoints/
+scripts/data_scripts/deprecated
 *.ipynb
 !data/word_table.yaml
 

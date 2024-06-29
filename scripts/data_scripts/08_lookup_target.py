@@ -1,7 +1,9 @@
+import os.path as osp
 from typing import Dict
 
 import pandas as pd
-import os.path as osp
+
+
 def cons_assay_target_dict(df_path: str) -> Dict[str, str]:
     df = pd.read_csv(df_path)
     df = df[["assay_chembl_id", "target_chembl_id"]]
