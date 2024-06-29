@@ -2,7 +2,7 @@ import os
 import os.path as osp
 import pickle
 import random
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
 
 import pandas as pd
 import selfies as sf
@@ -225,7 +225,7 @@ class LookupDict:
     def __repr__(self) -> str:
         return self.d.__repr__()
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> str:
         return self.d[key]
 
     def _read_csv(self, csv_path: str, cols: Optional[Tuple[str, str]]) -> None:
@@ -258,10 +258,10 @@ class LookupDict:
         pickle.dump(self.d, open(_dump_path, "wb"))
 
     def _const_lookup_func(self) -> None:
-        self._lookup = lambda k: self[k]
+        self._lookup: Callable[[str], Optional[str]] = lambda k: self.d.get(k, None)
 
     @property
-    def lookup(self):
+    def lookup(self) -> Callable[[str], Optional[str]]:
         return self._lookup
 
 

@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:332b11027b891a27b3e8ed234514806c9b8f93e424bf5bb8a2b18d7091954ea3"
+content_hash = "sha256:2d41eb83efce0d4a3de5ddc653caf51720ce5ea743804bcad0a2fc71d54de7f3"
 
 [[package]]
 name = "attrs"
@@ -502,6 +502,17 @@ groups = ["default"]
 files = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
+]
+
+[[package]]
+name = "terminaltables"
+version = "3.1.10"
+requires_python = ">=2.6"
+summary = "Generate simple tables in terminals from a nested list of strings."
+groups = ["default"]
+files = [
+    {file = "terminaltables-3.1.10-py2.py3-none-any.whl", hash = "sha256:e4fdc4179c9e4aab5f674d80f09d76fa436b96fdc698a8505e0a36bf0804a874"},
+    {file = "terminaltables-3.1.10.tar.gz", hash = "sha256:ba6eca5cb5ba02bba4c9f4f985af80c54ec3dccf94cfcd190154386255e47543"},
 ]
 
 [[package]]
