@@ -36,7 +36,8 @@ def compare_values(
 
     if unit == "%":
         diff = value_b - value_a
-        if abs(diff) < 50:
+        # 50
+        if abs(diff) < 25:
             return None
         if diff > 0:
             return "keep"
@@ -47,9 +48,11 @@ def compare_values(
             return None
 
         diff = value_b / value_a
-        if diff <= 0.2:
+        # 0.2
+        if diff <= 0.5:
             return "keep"
-        elif diff >= 5:
+        # 5
+        elif diff >= 2:
             return "revert"
         else:
             return None
@@ -147,11 +150,11 @@ def perm_mmp(mmp_path: str, assign_path: str) -> None:
 
 
 if __name__ == "__main__":
-    # assign_opt(
-    #     "../../data/1bond/mmp_pair_1bond_raw.csv",
-    #     "../../data/finetune/merged_activities.csv",
-    #     "../../data/finetune/assign_opt.csv",
-    #     "../../data/finetune/assay_dict.pkl",
-    #     "../../data/finetune/value_dict.pkl",
-    # )
+    assign_opt(
+        "../../data/1bond/mmp_pair_1bond_raw.csv",
+        "../../data/finetune/merged_activities.csv",
+        "../../data/finetune/assign_opt.csv",
+        "../../data/finetune/assay_dict.pkl",
+        "../../data/finetune/value_dict.pkl",
+    )
     perm_mmp("../../data/1bond/mmp_pair_1bond_raw.csv", "../../data/finetune/assign_opt.csv")
