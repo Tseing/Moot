@@ -73,6 +73,7 @@ class BaseTokenizer(ABC):
         tokens = regex.findall(seq)
 
         if "".join(tokens) != seq:
+            print(f"UNK token Warning: '{seq}'\n-> {tokens}")
             tokens = self._replace_unk(seq, tokens)
 
         return tokens

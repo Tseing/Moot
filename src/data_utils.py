@@ -250,8 +250,12 @@ class LookupDict:
         self.d = pickle.load(open(path, "rb"))
         self._const_lookup_func()
 
-    def dump(self):
-        pickle.dump(self.d, open(self.dump_path, "wb"))
+    def dump(self, path: Optional[str] = None):
+        if path is None:
+            _dump_path = self.dump_path
+        else:
+            _dump_path = path
+        pickle.dump(self.d, open(_dump_path, "wb"))
 
     def _const_lookup_func(self) -> None:
         self._lookup = lambda k: self[k]
