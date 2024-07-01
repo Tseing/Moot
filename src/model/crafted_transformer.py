@@ -512,6 +512,7 @@ class OptFormer(nn.Module):
         if device is None:
             device = torch.device(torch._C._get_default_device())
 
+        self.padding_idx = padding_idx
         self.mol_embedding = Embedding(vocab_size, d_model, padding_idx)
         self.prot_embedding = Embedding(vocab_size, d_model, padding_idx)
         dec_embedding = self.mol_embedding
@@ -541,8 +542,6 @@ class OptFormer(nn.Module):
             n_head=n_head,
             n_layer=enc_n_layer,
             d_ffn=enc_d_ffn,
-            padding_idx_a=padding_idx,
-            padding_idx_b=padding_idx,
             dropout=enc_dropout,
             relu_dropout=enc_relu_dropout,
             attn_dropout=enc_attn_dropout,
@@ -602,7 +601,6 @@ class OptFormer(nn.Module):
         prot_tokens: Int[Tensor, "bsz seq_len_b"],
         prev_output_tokens: Int[Tensor, "bsz seq_len"],
     ):
-
         x_a = self.embed_scale * self.mol_embedding(mol_tokens)
         if self.mol_embed_positions is not None:
             x_a += self.mol_embed_positions(mol_tokens)
@@ -614,12 +612,15 @@ class OptFormer(nn.Module):
         x_a = F.dropout(x_a, p=self.embed_dropout, training=self.training)
         x_b = F.dropout(x_b, p=self.embed_dropout, training=self.training)
 
-        x_a, x_b, x_a_padding_mask, x_b_padding_mask = self.encoder(x_a, x_b)
+        x_a_padding_mask = mol_tokens.eq(self.padding_idx)
+        x_b_padding_mask = prot_tokens.eq(self.padding_idx)
+        x_a, x_b = self.encoder(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
         encoder_out = self.attn_fuse(x_a, x_b)
-        padding_mask = torch.concatenate([x_a_padding_mask, x_b_padding_mask], dim=0)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out, padding_mask)
 
-        return decoder_out
+        padding_mask = torch.concatenate([x_a_padding_mask, x_b_padding_mask], dim=1)
+        decoder_out, attn = self.decoder(prev_output_tokens, encoder_out, padding_mask)
+
+        return decoder_out, attn
 
 
 class OptFormerEncoder(nn.Module):
@@ -629,8 +630,6 @@ class OptFormerEncoder(nn.Module):
         n_head: int,
         n_layer: int,
         d_ffn: int,
-        padding_idx_a: int,
-        padding_idx_b: int,
         dropout: float,
         relu_dropout: float,
         attn_dropout: float,
@@ -638,9 +637,6 @@ class OptFormerEncoder(nn.Module):
         seed=0,
     ) -> None:
         super().__init__()
-
-        self.padding_idx_a = padding_idx_a
-        self.padding_idx_b = padding_idx_b
 
         self.layers = nn.ModuleList([])
         self.layers.extend(
@@ -652,25 +648,15 @@ class OptFormerEncoder(nn.Module):
             ]
         )
 
-    @staticmethod
-    def compute_padding_mask(inp: Tensor, padding_idx: int) -> Optional[Tensor]:
-        padding_mask = inp.eq(padding_idx)
-        if not padding_mask.any():
-            _padding_mask = None
-        else:
-            _padding_mask = padding_mask
-
-        return _padding_mask
-
     def forward(
         self,
         encoder_inp_a: Float[Tensor, "bsz seq_len_a d"],
+        inp_a_padding_mask: Bool[Tensor, "bsz seq_len"],
         encoder_inp_b: Float[Tensor, "bsz seq_len_b d"],
+        inp_b_padding_mask: Bool[Tensor, "bsz seq_len"],
     ) -> Tuple[
         Float[Tensor, "seq_len_a bsz d_model"],
         Float[Tensor, "seq_len_b bsz d_model"],
-        Optional[Bool[Tensor, "seq_len_a bsz"]],
-        Optional[Bool[Tensor, "seq_len_b bsz"]],
     ]:
         x_a, x_b = encoder_inp_a, encoder_inp_b
 
@@ -679,16 +665,14 @@ class OptFormerEncoder(nn.Module):
         x_a = x_a.transpose(0, 1)
         x_b = x_b.transpose(0, 1)
 
-        # compute padding mask
-        x_a_padding_mask = self.compute_padding_mask(x_a, self.padding_idx_a)
-        x_b_padding_mask = self.compute_padding_mask(x_b, self.padding_idx_b)
+        x_a_padding_mask, x_b_padding_mask = inp_a_padding_mask, inp_b_padding_mask
 
         # encoder layers
         for layer in self.layers:
             x_a, x_b = layer(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
 
         # x.shape == T x B x C, encoder_padding_mask.shape == B x T
-        return x_a, x_b, x_a_padding_mask, x_b_padding_mask
+        return x_a, x_b
 
     def reorder_encoder_out(self, encoder_out, encoder_padding_mask, new_order):
         if encoder_out is not None:
@@ -830,7 +814,7 @@ class CrossAttnLayer(nn.Module):
         x_b: Float[Tensor, "seq_len_b bsz d"],
         x_b_padding_mask: Bool[Tensor, "seq_len_b bsz "],
     ) -> Tuple[Float[Tensor, "seq_len_a bsz d"], Float[Tensor, "seq_len_b bsz d"]]:
-        attn_a, _ = self.cross_attn1(
+        attn_a, _ = self.cross_attn_a(
             query=x_a,
             key=x_b,
             value=x_b,
@@ -841,7 +825,7 @@ class CrossAttnLayer(nn.Module):
             static_kv=False,
         )
 
-        attn_b, _ = self.cross_attn2(
+        attn_b, _ = self.cross_attn_b(
             query=x_b,
             key=x_a,
             value=x_a,
@@ -861,7 +845,9 @@ class AttnFuse(nn.Module):
         self.ffn = FFN(d_model, d_ffn, relu_dropout, dropout)
         self.norm = nn.LayerNorm(d_model)
 
-    def forward(self, x_a: Float[Tensor, "seq_len_a bsz d"], x_b: Float[Tensor, "seq_len_b bsz d"]):
+    def forward(
+        self, x_a: Float[Tensor, "seq_len_a bsz d"], x_b: Float[Tensor, "seq_len_b bsz d"]
+    ) -> Float[Tensor, "seq_len_a+seq_len_b bsz d"]:
         x = torch.concatenate([x_a, x_b], dim=0)
         residual = x
         x = self.ffn(x)

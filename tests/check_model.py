@@ -4,17 +4,32 @@ sys.path.append("..")
 import torch
 from torch.utils.data import DataLoader
 
-from src.dataset import MMPDataset
-from src.model.crafted_transformer import Transformer
-from src.tokenizer import MMPTokenizer
+from src.dataset import MolProtDataset
+from src.model.crafted_transformer import OptFormer
+from src.tokenizer import (
+    ProteinTokenizer,
+    SelfiesTokenizer,
+    SmilesTokenizer,
+    share_vocab,
+)
 
 if __name__ == "__main__":
     device = torch.device("cpu")
-    tokenizer = MMPTokenizer()
-    tokenizer.load_word_table("../data/smiles_word_table.yaml")
-    dataset = MMPDataset(
-        "../data/1bond/100k_dataset/test_smiles.csv", max_len=300, tokenizer=tokenizer
+
+    smiles_tokenizer = SmilesTokenizer()
+    smiles_tokenizer.load_word_table("../data/all/smiles_word_table.yaml")
+    protein_tokenizer = ProteinTokenizer()
+    protein_tokenizer, smiles_tokenizer = share_vocab(protein_tokenizer, smiles_tokenizer)
+
+    dataset = MolProtDataset(
+        "../data/finetune/runtime/datasets_seed_0/finetune_test_smiles.csv",
+        mol_max_len=250,
+        prot_max_len=1500,
+        mol_tokenizer=smiles_tokenizer,
+        prot_tokenizer=protein_tokenizer,
+        left_pad=True,
     )
+
     dataloader = DataLoader(
         dataset,
         batch_size=16,
@@ -22,16 +37,17 @@ if __name__ == "__main__":
         num_workers=20,
     )
 
-    vocab_size = dataset.tokenizer.vocab_size
-    pad_idx = dataset.tokenizer.vocab2index[dataset.tokenizer.pad]
+    vocab_size = dataset.mol_tokenizer.vocab_size
+    pad_idx = dataset.mol_tokenizer.vocab2index[dataset.mol_tokenizer.pad]
 
-    model = Transformer(
-        d_model=4,
+    model = OptFormer(
+        d_model=256,
         n_head=4,
         enc_n_layer=2,
         dec_n_layer=2,
         enc_d_ffn=256,
         dec_d_ffn=256,
+        fuse_d_ffn=256,
         enc_dropout=0.1,
         dec_dropout=0.1,
         enc_embed_dropout=0.1,
@@ -42,17 +58,21 @@ if __name__ == "__main__":
         dec_attn_dropout=0.1,
         vocab_size=vocab_size,
         padding_idx=pad_idx,
+        mol_max_len=250,
+        prot_max_len=1500,
         device=device,
-        max_len=300,
     ).to(device)
 
-    for src, tgt in dataloader:
-        src = src.int().to(device)
+    for mol, prot, tgt in dataloader:
+        print(f"vocab_size: {vocab_size}")
+        mol = mol.int().to(device)
+        prot = prot.int().to(device)
         tgt = tgt.int().to(device)
-        print(src.shape, src.dtype)
+        print(mol.shape, mol.dtype)
+        print(prot.shape, prot.dtype)
         print(tgt.shape, tgt.dtype)
 
-        out = model(src, tgt)
-        print(out)
-        print(out[0].shape, out[1].shape)
+        out, _ = model(mol, prot, tgt)
+        # print(out)
+        print(out.shape)
         break
