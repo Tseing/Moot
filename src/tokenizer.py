@@ -169,7 +169,7 @@ class SelfiesTokenizer(StrTokenizer):
 
 class ProteinTokenizer(StrTokenizer):
     def __init__(self):
-        pattern = "-[A|R|N|D|C|Q|E|G|H|I|L|K|M|F|P|S|T|W|Y|V|X]|{unk}"
+        pattern = "-[A|R|N|D|C|Q|E|G|H|I|L|K|M|F|P|S|T|W|Y|V|X|U|O]|{unk}"
         super().__init__(pattern)
         word_table = [
             "-A",
@@ -193,6 +193,8 @@ class ProteinTokenizer(StrTokenizer):
             "-Y",
             "-V",
             "-X",
+            "-U",   # selenocysteine (Sec)
+            "-O"    # pyrrolysine (Pyl)
         ]
         self.word_table = self.special_tokens + word_table
         self.update_vocab()
