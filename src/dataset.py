@@ -111,10 +111,9 @@ class MolProtDataset(Dataset):
     ]:
         return self.transform(self.src_a[index], self.src_b[index], self.tgt[index])
 
-    def transform(
-        self, mol: str, prot: str, tgt: str
-    ) -> Tuple[
-        Int[ndarray, "mol_max_len"], Int[ndarray, "prot_max_len"], Int[ndarray, "mol_max_len"]
+    def transform(self, mol: str, prot: str, tgt: str) -> Tuple[
+        Tuple[Int[ndarray, "mol_max_len"], Int[ndarray, "prot_max_len"]],
+        Int[ndarray, "mol_max_len"],
     ]:
         tokenized_mol = self.mol_tokenizer.tokenize(mol)
         prot = "".join([f"-{letter}" for letter in prot])
@@ -126,21 +125,21 @@ class MolProtDataset(Dataset):
             self.mol_max_len,
             self.mol_tokenizer.vocab2index[self.mol_tokenizer.pad],
             self.left_pad,
-        )
+        ).astype(self.dtype)
         padded_prot = self.pad_sequence(
             tokenized_prot,
             self.prot_max_len,
             self.prot_tokenizer.vocab2index[self.prot_tokenizer.pad],
             self.left_pad,
-        )
+        ).astype(self.dtype)
         padded_tgt = self.pad_sequence(
             tokenized_tgt,
             self.mol_max_len,
             self.mol_tokenizer.vocab2index[self.mol_tokenizer.pad],
             self.left_pad,
-        )
+        ).astype(self.dtype)
 
-        return padded_mol, padded_prot, padded_tgt
+        return (padded_mol, padded_prot), padded_tgt
 
     @staticmethod
     def pad_sequence(

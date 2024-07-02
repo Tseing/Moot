@@ -37,8 +37,11 @@ if __name__ == "__main__":
         num_workers=20,
     )
 
-    for mol, prot, tgt in dataloader:
+    for src, tgt in dataloader:
         # print(batch.shape)
+        print(type(src))
+        print(src)
+        mol, prot = src
         print(mol.shape)
         print(prot.shape)
         print(tgt.shape)

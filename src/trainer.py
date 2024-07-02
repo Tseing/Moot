@@ -1,5 +1,5 @@
 import os.path as osp
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -78,16 +78,29 @@ class ModelTrainer:
         else:
             self.info = lambda stdout: print(stdout)
 
+    @staticmethod
+    def __process_multi_inp(
+        inp: Union[Tuple[torch.Tensor, ...], List[torch.Tensor], torch.Tensor], device: Device
+    ) -> Tuple[torch.Tensor, ...]:
+        if isinstance(inp, (tuple, list)):
+            inps = tuple(tensor.to(device) for tensor in inp)
+        elif isinstance(inp, torch.Tensor):
+            inps = tuple([inp.to(device)])
+        else:
+            raise TypeError(f"Cannot process 'inp' with type '{type(inp)}'.")
+
+        return inps
+
     def train(self, dataloader: DataLoader, saver: ModelSaver):
         self.model.train()
         epoch = self.check_now_epoch()
         epoch_loss = 0
         for step, (src, tgt) in enumerate(dataloader):
-            src = src.to(self.device)
+            src = self.__process_multi_inp(src, self.device)
             tgt = tgt.to(self.device)
 
             self.optimizer.zero_grad()
-            output, _ = self.model(src, tgt[:, :-1])
+            output, _ = self.model(*src, tgt[:, :-1])
 
             loss = self.criterion(output.transpose(1, 2), tgt[:, 1:])
             loss.backward()
@@ -125,9 +138,9 @@ class ModelTrainer:
 
         with torch.no_grad():
             for step, (src, tgt) in enumerate(dataloader):
-                src = src.to(self.device)
+                src = self.__process_multi_inp(src, self.device)
                 tgt = tgt.to(self.device)
-                output, _ = self.model(src, tgt[:, :-1])
+                output, _ = self.model(*src, tgt[:, :-1])
 
                 loss = self.criterion(output.transpose(1, 2), tgt[:, 1:])
                 epoch_loss += loss.item()
