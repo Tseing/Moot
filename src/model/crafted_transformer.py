@@ -1,14 +1,17 @@
 import math
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
+from typing_extensions import TypeAlias
 
 from ..typing import Device
 from .modules import MultiheadAttention, SinusoidalPositionalEmbedding
+
+Model: TypeAlias = Union["Transformer", "OptFormer"]
 
 
 class Transformer(nn.Module):
@@ -32,6 +35,7 @@ class Transformer(nn.Module):
         vocab_size: int,
         padding_idx: int,
         max_len: int = 512,
+        left_pad: bool = True,
         device: Optional[Device] = None,
         seed=0,
     ):
@@ -54,6 +58,7 @@ class Transformer(nn.Module):
             embed_dropout=enc_embed_dropout,
             relu_dropout=enc_relu_dropout,
             attn_dropout=enc_attn_dropout,
+            left_pad=left_pad,
             device=device,
             seed=seed,
         )

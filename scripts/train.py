@@ -20,9 +20,9 @@ from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
 from src.trainer import ModelSaver, ModelTrainer
 from src.utils import Cfg, Log, count_parameters, initialize_weights
 
-RDLogger.DisableLog("rdApp.*")
-
 if __name__ == "__main__":
+    RDLogger.DisableLog("rdApp.*")
+
     cfg = Cfg()
     cfg.parse()
 
@@ -38,25 +38,28 @@ if __name__ == "__main__":
     device = torch.device(cfg.device)
     torch.npu.set_device(device)
 
-    tokenizer: Optional[StrTokenizer] = None
+    mol_tokenizer: Optional[StrTokenizer] = None
     if cfg.data_format == "SMILES":
-        tokenizer = SmilesTokenizer()
+        mol_tokenizer = SmilesTokenizer()
     elif cfg.data_format == "SELFIES":
-        tokenizer = SelfiesTokenizer()
+        mol_tokenizer = SelfiesTokenizer()
     else:
         assert False, (
             f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
         )
-    tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
+    mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
 
     train_dataset = MMPDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
         max_len=cfg.max_len,
-        tokenizer=tokenizer,
-        left_pad=True,
+        tokenizer=mol_tokenizer,
+        left_pad=cfg.left_pad,
     )
     val_dataset = MMPDataset(
-        osp.join(cfg.DATA_DIR, cfg.val_data_path), max_len=cfg.max_len, tokenizer=tokenizer
+        osp.join(cfg.DATA_DIR, cfg.val_data_path),
+        max_len=cfg.max_len,
+        tokenizer=mol_tokenizer,
+        left_pad=cfg.left_pad,
     )
     train_dl = DataLoader(
         train_dataset,
@@ -71,8 +74,8 @@ if __name__ == "__main__":
         num_workers=20,
     )
 
-    vocab_size = tokenizer.vocab_size
-    pad_value = tokenizer.vocab2index[tokenizer.pad]
+    vocab_size = mol_tokenizer.vocab_size
+    pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
 
     model = Transformer(
         d_model=cfg.d_model,
@@ -91,6 +94,7 @@ if __name__ == "__main__":
         dec_attn_dropout=cfg.dec_attn_dropout,
         vocab_size=vocab_size,
         padding_idx=pad_value,
+        left_pad=cfg.left_pad,
         max_len=cfg.max_len,
         device=device,
         seed=cfg.seed,
@@ -107,15 +111,15 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
 
     if cfg.data_format == "SMILES":
-        metrics = SmilesMetrics(tokenizer)
+        metrics = SmilesMetrics(mol_tokenizer)
     elif cfg.data_format == "SELFIES":
-        metrics = SelfiesMetrics(tokenizer)
+        metrics = SelfiesMetrics(mol_tokenizer)
     else:
         assert False, (
             f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
         )
 
-    saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=2)
+    saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=cfg.save_interval)
 
     trainer = ModelTrainer(
         model=model,
@@ -125,7 +129,7 @@ if __name__ == "__main__":
         criterion=criterion,
         metrics=metrics,
         saver=saver,
-        tokenizer=tokenizer,
+        tokenizer=mol_tokenizer,
         device=device,
         logger=logger,
         log_interval=cfg.log_interval,
