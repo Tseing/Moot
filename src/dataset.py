@@ -24,8 +24,8 @@ class MMPDataset(Dataset):
     ) -> None:
         super().__init__()
         df = pd.read_csv(data_path, **kwargs)
-        src = df.iloc[:, 0].to_numpy()
-        tgt = df.iloc[:, 1].to_numpy()
+        src = df["mol_a"].to_numpy()
+        tgt = df["mol_b"].to_numpy()
         assert len(src) == len(tgt), f"Unmatched shape: src '{src.shape}', tgt '{tgt.shape}'."
         self.len = src.shape[0]
         self.src = src

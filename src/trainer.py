@@ -102,7 +102,7 @@ class ModelTrainer:
             self.optimizer.zero_grad()
             output, _ = self.model(*src, tgt[:, :-1])
 
-            loss = self.criterion(output.transpose(1, 2), tgt[:, 1:])
+            loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
             loss.backward()
 
             self.optimizer.step()
@@ -142,7 +142,7 @@ class ModelTrainer:
                 tgt = tgt.to(self.device)
                 output, _ = self.model(*src, tgt[:, :-1])
 
-                loss = self.criterion(output.transpose(1, 2), tgt[:, 1:])
+                loss = self.criterion(output.transpose(1, 2), tgt[:, 1:].long())
                 epoch_loss += loss.item()
 
                 output_seq = output.argmax(dim=-1).cpu().numpy()
