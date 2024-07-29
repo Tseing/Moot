@@ -6,7 +6,6 @@ import os.path as osp
 from typing import Optional
 
 import torch
-import torch_npu
 from rdkit import RDLogger
 from torch import nn
 from torch.optim import Adam
@@ -36,7 +35,6 @@ if __name__ == "__main__":
     logger.info(f"Config:\n{repr(cfg)}")
 
     device = torch.device(cfg.device)
-    torch.npu.set_device(device)
 
     mol_tokenizer: Optional[StrTokenizer] = None
     if cfg.data_format == "SMILES":
@@ -54,12 +52,14 @@ if __name__ == "__main__":
         max_len=cfg.max_len,
         tokenizer=mol_tokenizer,
         left_pad=cfg.left_pad,
+        usecols=["mol_a", "mol_b"],
     )
     val_dataset = MMPDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
         max_len=cfg.max_len,
         tokenizer=mol_tokenizer,
         left_pad=cfg.left_pad,
+        usecols=["mol_a", "mol_b"],
     )
     train_dl = DataLoader(
         train_dataset,

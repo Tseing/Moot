@@ -1,18 +1,19 @@
 # project
 task_name: "basic_transformer_smiles"
-device: "npu:5"
+device: "cuda"
 train_data_path: "finetune/runtime/datasets_seed_0/finetune_train_smiles.csv"
 val_data_path: "finetune/runtime/datasets_seed_0/finetune_val_smiles.csv"
 word_table_path: "all/smiles_word_table.yaml"
 data_format: "SMILES"
 
 # train
-learning_rate: 5.0e-4
+learning_rate: 1.0e-4
 min_learning_rate: 1.0e-6
-warming_step: 5000
+# warming_steps * bsz / all_size = proportion
+warming_step: 72200   # 100% epoch
 weight_decay: 1.0e-5
-batch_size: 256
-epoch_num: 100
+batch_size: 64
+epoch_num: 5
 log_interval: 50
 seed: 42
 save_interval: 40
