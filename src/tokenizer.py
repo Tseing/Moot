@@ -17,9 +17,10 @@ Tokenizer: TypeAlias = Union[
 class BaseTokenizer(ABC):
     def __init__(self, special_tokens: Optional[List[str]] = None):
         self.pad = "{pad}"
+        self.bos = "{bos}"
+        self.eos = "{eos}"
         self.unk = "{unk}"
-        self.cls = "{cls}"
-        self.special_tokens = [self.pad, self.cls, self.unk]
+        self.special_tokens = [self.pad, self.bos, self.eos, self.unk]
 
         self.pattern: str
 
@@ -101,12 +102,7 @@ class BaseTokenizer(ABC):
 
 class StrTokenizer(BaseTokenizer):
     def __init__(self, pattern: str):
-        self.bos = "{bos}"
-        self.eos = "{eos}"
         self.pattern = pattern
-        special_tokens = [self.bos, self.eos]
-
-        super().__init__(special_tokens)
 
     def build_word_table(self, seqs: Iterable[str], dump_path: Optional[str] = None) -> List[str]:
         unique_tokens = set()
@@ -173,31 +169,25 @@ class ProteinTokenizer(StrTokenizer):
         super().__init__(pattern)
         word_table = [
             "-A",
-            "-B",
-            "-C",
+            "-R",
+            "-N",
             "-D",
+            "-C",
+            "-Q",
             "-E",
-            "-F",
             "-G",
             "-H",
             "-I",
-            "-J",
-            "-K",
             "-L",
+            "-K",
             "-M",
-            "-N",
-            "-O",
+            "-F",
             "-P",
-            "-Q",
-            "-R",
             "-S",
             "-T",
-            "-U",
-            "-V",
             "-W",
-            "-X",
             "-Y",
-            "-Z",
+            "-V",
         ]
         self.word_table = self.special_tokens + word_table
         self.update_vocab()
