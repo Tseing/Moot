@@ -5,6 +5,7 @@ log/
 checkpoints/
 scripts/data_scripts/deprecated
 *.ipynb
+*.pkl
 !data/word_table.yaml
 
 # Ascend-compiled

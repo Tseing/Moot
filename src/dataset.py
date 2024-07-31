@@ -1,4 +1,4 @@
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Tuple, Literal
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 from .tokenizer import StrTokenizer
+from .utils import pad_sequence, maxlen
 
 
 class MMPDataset(Dataset):
@@ -205,24 +206,9 @@ class MolProtInferDataset:
     def pad_batch(
         data: List[Tuple[Tuple[NDArray, NDArray]]], pad_value: int, left_pad: bool = False
     ) -> Tuple[Tuple[Int[Tensor, "bsz ..."], Int[Tensor, "bsz ..."]], Int[Tensor, "bsz ..."]]:
-        def maxlen(it: Iterable[NDArray]) -> int:
-            return max([i.shape[0] for i in it])
-
-        def pad_sequence(
-            seq: Int[ndarray, "seq"],
-            max_len: int,
-        ) -> Int[ndarray, "max_len"]:
-            if left_pad:
-                pad_pos = (max_len - seq.shape[0], 0)
-            else:
-                pad_pos = (0, max_len - seq.shape[0])
-            padded_tokens = np.pad(seq, pad_pos, "constant", constant_values=pad_value)
-
-            return padded_tokens
-
         def pad_sequences(seqs: Iterable[Int[ndarray, "seq"]]) -> NDArray:
             max_len = maxlen(seqs)
-            return np.stack([pad_sequence(seq, max_len) for seq in seqs])
+            return np.stack([pad_sequence(seq, max_len, pad_value, left_pad) for seq in seqs])
 
         inps, tgts = list(zip(*data))
         mols, prots = list(zip(*inps))
@@ -232,3 +218,89 @@ class MolProtInferDataset:
         padded_prots = torch.tensor(pad_sequences(prots))
 
         return (padded_mols, padded_prots), padded_tgts
+
+
+class SingleInferDataset(Dataset):
+    def __init__(
+        self,
+        data_path: str,
+        data_cols: Tuple[str, str],
+        tokenizer: StrTokenizer,
+        dtype: DTypeLike = np.int32,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        df = pd.read_csv(data_path, usecols=data_cols, **kwargs)
+        src, tgt = df[data_cols[0]].to_numpy(), df[data_cols[1]].to_numpy()
+
+        assert len(src) == len(tgt), f"Unmatched shape: src '{src.shape}' and tgt '{tgt.shape}'."
+        self.len = src.shape[0]
+        self.src = src
+        self.tgt = tgt
+        self.tokenizer = tokenizer
+        self.dtype = dtype
+
+    def __len__(self) -> int:
+        return self.len
+
+    def __getitem__(self, index: int) -> Tuple[NDArray, NDArray]:
+        raise NotImplementedError
+        return self.transform(self.src[index], self.tgt[index])
+
+    @staticmethod
+    def pad_batch(
+        data: List[Tuple[NDArray, NDArray]], pad_value: int, left_pad: bool = False
+    ) -> Tuple[Int[Tensor, "bsz ..."], Int[Tensor, "bsz ..."]]:
+        def pad_sequences(seqs: Iterable[Int[ndarray, "seq"]]) -> NDArray:
+            max_len = maxlen(seqs)
+            return np.stack([pad_sequence(seq, max_len, pad_value, left_pad) for seq in seqs])
+
+        srcs, tgts = list(zip(*data))
+
+        padded_srcs = torch.tensor(pad_sequences(srcs))
+        padded_tgts = torch.tensor(pad_sequences(tgts))
+
+        return padded_srcs, padded_tgts
+
+
+class MolInferDataset(SingleInferDataset):
+    def __init__(
+        self,
+        data_path: str,
+        data_cols: Tuple[str, str],
+        tokenizer: StrTokenizer,
+        dtype: DTypeLike = np.int32,
+        **kwargs,
+    ) -> None:
+        super().__init__(data_path, data_cols, tokenizer, dtype, **kwargs)
+
+    def __getitem__(self, index: int) -> Tuple[NDArray, NDArray]:
+        return self.transform(self.src[index], self.tgt[index])
+
+    def transform(self, src: str, tgt: str) -> Tuple[NDArray, NDArray]:
+        tokenized_src = self.tokenizer.tokenize(src).astype(self.dtype)
+        tokenized_tgt = self.tokenizer.tokenize(tgt).astype(self.dtype)
+
+        return tokenized_src, tokenized_tgt
+
+
+class ProtInferDataset(SingleInferDataset):
+    def __init__(
+        self,
+        data_path: str,
+        data_cols: Tuple[str, str],
+        tokenizer: StrTokenizer,
+        dtype: DTypeLike = np.int32,
+        **kwargs,
+    ) -> None:
+        super().__init__(data_path, data_cols, tokenizer, dtype, **kwargs)
+
+    def __getitem__(self, index: int) -> Tuple[NDArray, NDArray]:
+        return self.transform(self.src[index], self.tgt[index])
+
+    def transform(self, src: str, tgt: str) -> Tuple[NDArray, NDArray]:
+        src = "".join([f"-{letter}" for letter in src])
+        tokenized_src = self.tokenizer.tokenize(src).astype(self.dtype)
+        tokenized_tgt = self.tokenizer.tokenize(tgt).astype(self.dtype)
+
+        return tokenized_src, tokenized_tgt

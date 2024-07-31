@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Any, List, Tuple
+from typing import Any, List, Sequence, Tuple, Union, Iterable
 
 import numpy as np
 import selfies as sf
@@ -14,8 +14,9 @@ from numpy import ndarray
 from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from torch import Tensor, nn
-
+from numpy.typing import NDArray
 from .tokenizer import StrTokenizer
+from .typing import Device
 
 
 def count_parameters(model: nn.Module) -> int:
@@ -29,6 +30,46 @@ def initialize_weights(m) -> None:
 
 def now_time() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+
+
+def item(tensor: Tensor) -> Union[Tensor, float]:
+    if hasattr(tensor, "item"):
+        return tensor.item()
+    if hasattr(tensor, "__getitem__"):
+        return tensor[0]
+    return tensor
+
+
+def move(
+    data: Union[Tensor, Sequence[Tensor], Tuple[Tensor, ...]], device: Device
+) -> Union[Tensor, Sequence[Tensor]]:
+    if isinstance(data, Tensor):
+        data = data.to(device)
+    elif isinstance(data, (list, tuple)):
+        data = tuple(d.to(device) for d in data)
+    else:
+        raise TypeError(f"'move()' not support type: {type(data)}.")
+
+    return data
+
+
+def maxlen(seqs: Iterable[NDArray]) -> int:
+    return max([seq.shape[0] for seq in seqs])
+
+
+def pad_sequence(
+    seq: Int[ndarray, "seq"],
+    max_len: int,
+    pad_value: int,
+    left_pad: bool = False,
+) -> Int[ndarray, "max_len"]:
+    if left_pad:
+        pad_pos = (max_len - seq.shape[0], 0)
+    else:
+        pad_pos = (0, max_len - seq.shape[0])
+    padded_tokens = np.pad(seq, pad_pos, "constant", constant_values=pad_value)
+
+    return padded_tokens
 
 
 def check_seq(

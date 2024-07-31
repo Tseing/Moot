@@ -1,30 +1,41 @@
 import math
+import pickle
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, cast
 
 import torch
 import torch.nn.functional as F
+from jaxtyping import Float, Int
+from torch import Tensor
 from torch.cuda import amp
+from tqdm import tqdm
 
-from fairseq import utils
-from fairseq.models import FairseqIncrementalDecoder
+from .model.crafted_transformer import IncrementalDecoder, Model
+from .typing import Device
+
+from .utils import move
 
 
-class SequenceGenerator(object):
+class SequenceGenerator:
     def __init__(
         self,
-        models,
-        vocab_meta,
-        maxlen,
-        beam_size=1,
-        minlen=1,
-        stop_early=True,
-        normalize_scores=True,
+        models: Sequence[Model],
+        pad_idx: int,
+        unk_idx: int,
+        eos_idx: int,
+        vocab_size: int,
+        maxlen: int,
+        beam_size: int = 1,
+        minlen: int = 1,
+        stop_early: bool = True,
+        normalize_scores: bool = True,
         len_penalty=1,
         unk_penalty=0,
-        retain_dropout=False,
-        sampling=False,
-        sampling_topk=-1,
+        retain_dropout: bool = False,
+        sampling: bool = False,
+        sampling_topk: int = -1,
         sampling_temperature=1,
-        use_amp=False,
+        use_amp: bool = False,
+        device: Optional[Device] = None,
     ):
         """Generates translations of a given source sentence.
         Args:
@@ -36,10 +47,10 @@ class SequenceGenerator(object):
             normalize_scores: Normalize scores by the length of the output.
         """
         self.models = models
-        self.pad = vocab_meta["pad"]
-        self.unk = vocab_meta["unk"]
-        self.eos = vocab_meta["eos"]
-        self.vocab_size = vocab_meta["len"]
+        self.pad = pad_idx
+        self.unk = unk_idx
+        self.eos = eos_idx
+        self.vocab_size = vocab_size
         self.beam_size = beam_size
         self.minlen = minlen
         # max_decoder_len = min(m.max_decoder_positions() for m in self.models)
@@ -55,19 +66,20 @@ class SequenceGenerator(object):
         self.sampling_topk = sampling_topk
         self.sampling_temperature = sampling_temperature
         self.use_amp = use_amp
+        if device is None:
+            device = torch.device(torch._C._get_default_device())
+        self.device = device
 
-    def cuda(self):
-        for model in self.models:
-            model.cuda()
-        return self
+    @staticmethod
+    def strip_pad(tensor: Tensor, pad: int):
+        return tensor[tensor.ne(pad)]
 
     def generate_batched_itr(
         self,
-        data_itr,
-        beam_size=None,
-        maxlen_a=0.0,
-        maxlen_b=None,
-        cuda=False,
+        data_itr: Iterable[dict],
+        beam_size: Optional[int] = None,
+        maxlen_a: float = 0.0,
+        maxlen_b: Optional[int] = None,
         timer=None,
         prefix_size=0,
     ):
@@ -82,7 +94,7 @@ class SequenceGenerator(object):
             maxlen_b = self.maxlen
 
         for sample in data_itr:
-            s = utils.move_to_cuda(sample) if cuda else sample
+            s = sample
             if "net_input" not in s:
                 continue
             input = s["net_input"]
@@ -91,53 +103,69 @@ class SequenceGenerator(object):
                 timer.start()
             with torch.no_grad():
                 hypos = self.generate(
-                    input["src_tokens"],
-                    input["src_lengths"],
+                    move(input["src_tokens"], self.device),
                     beam_size=beam_size,
                     maxlen=int(maxlen_a * srclen + maxlen_b),
-                    prefix_tokens=s["target"][:, :prefix_size] if prefix_size > 0 else None,
+                    prefix_tokens=(
+                        move(s["target"][:, :prefix_size], self.device) if prefix_size > 0 else None
+                    ),
                 )
             if timer is not None:
                 timer.stop(sum(len(h[0]["tokens"]) for h in hypos))
             for i, id in enumerate(s["id"].data):
                 # remove padding
-                src = utils.strip_pad(input["src_tokens"].data[i, :], self.pad)
+                src = self.strip_pad(input["src_tokens"].data[i, :], self.pad)
                 ref = (
-                    utils.strip_pad(s["target"].data[i, :], self.pad)
+                    self.strip_pad(s["target"].data[i, :], self.pad)
                     if s["target"] is not None
                     else None
                 )
                 yield id, src, ref, hypos[i]
 
-    def generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
+    def generate(
+        self,
+        src_tokens: Int[Tensor, "bsz seq_len"],
+        beam_size: Optional[int] = None,
+        maxlen: Optional[int] = None,
+        prefix_tokens=None,
+    ):
         """Generate a batch of translations."""
         with torch.no_grad():
             with amp.autocast(enabled=self.use_amp):
-                return self._generate(src_tokens, src_lengths, beam_size, maxlen, prefix_tokens)
+                return self._generate(src_tokens, beam_size, maxlen, prefix_tokens)
 
-    def _generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
+    def _generate(
+        self,
+        src_tokens: Int[Tensor, "bsz seq_len"],
+        beam_size: Optional[int] = None,
+        maxlen: Optional[int] = None,
+        prefix_tokens=None,
+    ) -> List[List[Dict[str, Tensor]]]:
         bsz, srclen = src_tokens.size()
         maxlen = min(maxlen, self.maxlen) if maxlen is not None else self.maxlen
 
         # the max beam size is the dictionary size - 1, since we never select pad
         beam_size = beam_size if beam_size is not None else self.beam_size
         beam_size = min(beam_size, self.vocab_size - 1)
+        beam_size = cast(int, beam_size)
 
-        encoder_outs = []
-        incremental_states = {}
+        encoder_outs: List[Tuple[Tensor, Tensor]] = []
+        incremental_states: Dict[Model, Optional[dict]] = {}
         for model in self.models:
             if not self.retain_dropout:
                 model.eval()
-            if isinstance(model.decoder, FairseqIncrementalDecoder):
+            # FIXME: IncrementalDecoder, TransformerDecoder, OptFormerDecoder
+            if isinstance(model.decoder, IncrementalDecoder):
                 incremental_states[model] = {}
             else:
                 incremental_states[model] = None
 
+            # TODO: replace by enc_forward()
             # compute the encoder output for each beam
-            encoder_out = model.encoder(
-                src_tokens.repeat(1, beam_size).view(-1, srclen),
-                src_lengths.expand(beam_size, src_lengths.numel()).t().contiguous().view(-1),
-            )
+            print(src_tokens)
+            print(src_tokens.shape)
+            print(src_tokens.repeat(1, beam_size).view(-1, srclen).shape)
+            encoder_out = model.encoder(src_tokens.repeat(1, beam_size).view(-1, srclen))
             encoder_outs.append(encoder_out)
 
         # initialize buffers
@@ -150,9 +178,9 @@ class SequenceGenerator(object):
         nonpad_idxs = None
 
         # list of completed sentences
-        finalized = [[] for i in range(bsz)]
-        finished = [False for i in range(bsz)]
-        worst_finalized = [{"idx": None, "score": -math.inf} for i in range(bsz)]
+        finalized = [[] for _ in range(bsz)]
+        finished = [False for _ in range(bsz)]
+        worst_finalized = [{"idx": None, "score": -math.inf} for _ in range(bsz)]
         num_remaining_sent = bsz
 
         # number of candidate hypos per step
@@ -163,14 +191,14 @@ class SequenceGenerator(object):
         cand_offsets = torch.arange(0, cand_size).type_as(tokens)
 
         # helper function for allocating buffers on the fly
-        buffers = {}
+        buffers: Dict[str, Tensor] = {}
 
-        def buffer(name, type_of=tokens):  # noqa
+        def buffer(name: str, type_of: Tensor = tokens) -> Tensor:  # noqa
             if name not in buffers:
                 buffers[name] = type_of.new()
             return buffers[name]
 
-        def is_finished(sent, step, unfinalized_scores=None):
+        def is_finished(sent: int, step: int, unfinalized_scores: Optional[dict] = None) -> bool:
             """
             Check whether we've finished generation for a given sentence, by
             comparing the worst score among finalized hypotheses to the best
@@ -225,7 +253,7 @@ class SequenceGenerator(object):
             if self.normalize_scores:
                 eos_scores /= (step + 1) ** self.len_penalty
 
-            cum_unfin = []
+            cum_unfin: List[int] = []
             prev = 0
             for f in finished:
                 if f:
@@ -233,8 +261,9 @@ class SequenceGenerator(object):
                 else:
                     cum_unfin.append(prev)
 
-            sents_seen = set()
+            sents_seen: Set[Tuple[int, int]] = set()
             for i, (idx, score) in enumerate(zip(bbsz_idx.tolist(), eos_scores.tolist())):
+                idx, score = cast(Tuple[int, float], (idx, score))
                 unfin_idx = idx // beam_size
                 sent = unfin_idx + cum_unfin[unfin_idx]
 
@@ -283,7 +312,9 @@ class SequenceGenerator(object):
 
         reorder_state = None
         batch_idxs = None
-        for step in range(maxlen + 1):  # one extra step for EOS marker
+        for step in tqdm(
+            range(maxlen + 1), desc="Batch Generation"
+        ):  # one extra step for EOS marker
             # reorder decoder internal states based on the prev choice of beams
             if reorder_state is not None:
                 if batch_idxs is not None:
@@ -291,7 +322,7 @@ class SequenceGenerator(object):
                     corr = batch_idxs - torch.arange(batch_idxs.numel()).type_as(batch_idxs)
                     reorder_state.view(-1, beam_size).add_(corr.unsqueeze(-1) * beam_size)
                 for i, model in enumerate(self.models):
-                    if isinstance(model.decoder, FairseqIncrementalDecoder):
+                    if isinstance(model.decoder, IncrementalDecoder):
                         model.decoder.reorder_incremental_state(
                             incremental_states[model], reorder_state
                         )
@@ -385,6 +416,7 @@ class SequenceGenerator(object):
                             cand_size, probs.view(bsz, -1).size(1) - 1
                         ),  # -1 so we never select pad
                     )
+                    cand_indices = cand_indices.int()
                     cand_beams = torch.div(cand_indices, self.vocab_size, rounding_mode="trunc")
                     cand_indices.fmod_(self.vocab_size)
             else:
@@ -467,7 +499,7 @@ class SequenceGenerator(object):
 
             # get the top beam_size active hypotheses, which are just the hypos
             # with the smallest values in active_mask
-            _ignore, active_hypos = torch.topk(
+            _, active_hypos = torch.topk(
                 active_mask,
                 k=beam_size,
                 dim=1,
@@ -539,7 +571,12 @@ class SequenceGenerator(object):
 
         return finalized
 
-    def _decode(self, tokens, encoder_outs, incremental_states):
+    def _decode(
+        self,
+        tokens: Int[Tensor, "bsz seq_len"],
+        encoder_outs: List[Tuple[Float[Tensor, "bsz seq_len vocab_size"], Tensor]],
+        incremental_states: dict,
+    ) -> Tuple[Float[Tensor, "bsz seq_len"], Optional[Float[Tensor, "bsz seq_len d"]]]:
         if len(self.models) == 1:
             return self._decode_one(
                 tokens, self.models[0], encoder_outs[0], incremental_states, log_probs=True
@@ -560,16 +597,25 @@ class SequenceGenerator(object):
                     avg_attn = attn
                 else:
                     avg_attn.add_(attn)
+
+        avg_probs = cast(Tensor, avg_probs)
         avg_probs.div_(len(self.models))
         avg_probs.log_()
         if avg_attn is not None:
             avg_attn.div_(len(self.models))
         return avg_probs, avg_attn
 
-    def _decode_one(self, tokens, model, encoder_out, incremental_states, log_probs):
+    def _decode_one(
+        self,
+        tokens: Int[Tensor, "bsz seq_len"],
+        model: Model,
+        encoder_out: Tuple[Float[Tensor, "bsz seq_len vocab_size"], Float[Tensor, "bsz seq_len d"]],
+        incremental_states: dict,
+        log_probs: bool,
+    ) -> Tuple[Float[Tensor, "bsz seq_len"], Optional[Float[Tensor, "bsz seq_len d"]]]:
         with torch.no_grad():
             if incremental_states[model] is not None:
-                decoder_out = list(
+                decoder_out = tuple(
                     model.decoder(
                         tokens,
                         encoder_out[0],
@@ -578,18 +624,28 @@ class SequenceGenerator(object):
                     )
                 )
             else:
-                decoder_out = list(model.decoder(tokens, encoder_out[0], encoder_out[1]))
-            decoder_out[0] = decoder_out[0][:, -1, :]
+                decoder_out = tuple(model.decoder(tokens, encoder_out[0], encoder_out[1]))
+
+            decoder_out = cast(
+                Tuple[
+                    Float[Tensor, "bsz 1 vocab_size"],
+                    Optional[Float[Tensor, "bsz 1 d"]],
+                ],
+                decoder_out,
+            )
+            logits = decoder_out[0][:, -1, :]
             attn = decoder_out[1]
             if isinstance(attn, torch.Tensor) and attn.numel() == 0:
                 attn = None
             if attn is not None:
                 attn = attn[:, -1, :]
 
-        logits = decoder_out[0]
-        if log_probs:
-            probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
-        else:
-            probs = F.softmax(logits, dim=-1, dtype=torch.float32)
+        print(tokens)
+        print(logits.argmax(dim=-1))
+        probs = logits
+        # if log_probs:
+        #     probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
+        # else:
+        #     probs = F.softmax(logits, dim=-1, dtype=torch.float32)
 
         return probs, attn
