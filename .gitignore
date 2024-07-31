@@ -4,6 +4,7 @@ data/*
 log/
 checkpoints/
 scripts/data_scripts/deprecated
+scripts/plot_scripts/output
 *.ipynb
 *.pkl
 !data/word_table.yaml
