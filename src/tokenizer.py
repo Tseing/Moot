@@ -101,7 +101,8 @@ class BaseTokenizer(ABC):
 
 
 class StrTokenizer(BaseTokenizer):
-    def __init__(self, pattern: str):
+    def __init__(self, pattern: str, special_tokens: Optional[List[str]] = None):
+        super().__init__(special_tokens)
         self.pattern = pattern
 
     def build_word_table(self, seqs: Iterable[str], dump_path: Optional[str] = None) -> List[str]:
