@@ -33,6 +33,45 @@ def drop_long_prot(df_path: str, max_len: int = 1495) -> None:
     df.columns = ["target_chembl_id", "sequence"]
     df.to_csv(f"{file_path}_less{max_len}.csv", index=False)
 
+
+def drop_unk_aa_prot(df_path: str, save_path: str) -> None:
+    def _is_unk_aa(s: str) -> bool:
+        known_aa = set(
+            [
+                "A",
+                "R",
+                "N",
+                "D",
+                "C",
+                "Q",
+                "E",
+                "G",
+                "H",
+                "I",
+                "L",
+                "K",
+                "M",
+                "F",
+                "P",
+                "S",
+                "T",
+                "W",
+                "Y",
+                "V",
+            ]
+        )
+        unique_aas = set(s)
+        for aa in unique_aas:
+            if aa not in known_aa:
+                return True
+        return False
+
+    df = pd.read_csv(df_path)
+    df["unk"] = df["sequence"].apply(_is_unk_aa)
+    df.dropna(how="any", inplace=True)
+    df[["target_chembl_id", "sequence"]].to_csv(save_path, index=False)
+
+
 if __name__ == "__main__":
     # target_dict = cons_assay_target_dict("../../data/finetune/all_activities.csv")
     # fetch_unique_target_id(
@@ -41,4 +80,8 @@ if __name__ == "__main__":
     #     "../../data/finetune/unique_target_id.csv",
     # )
     # fetch_all_unique_target_id(target_dict, "../../data/finetune/all_unique_target_id.csv")
-    drop_long_prot("../../data/finetune/all_prot_seq.tsv")
+    # drop_long_prot("../../data/finetune/all_prot_seq.tsv")
+    drop_unk_aa_prot(
+        "../../data/finetune/all_prot_seq_less1495.csv",
+        "../../data/finetune/all_prot_seq_less1495_clean.csv",
+    )
