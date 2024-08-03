@@ -7,19 +7,17 @@ INFOS: Dict[str, list] = {
     "loss_smiles_transformer_18M.png": [
         {
             "name": "medium lr: [1.0e-6, 1.0e-4]",
-            "path": "../../log/basic_transformer_smiles.log",
+            "path": "../../log/0801basic_transformer_smiles_medium_lr.log",
         },
         {
             "name": "large lr: [1.0e-6, 5.0e-4]",
-            "path": "../../log/basic_transformer_smiles_18M.log",
+            "path": "../../log/0803basic_transformer_smiles_large_lr.log",
         },
     ],
     "loss_smiles_pretrain_100k.png": [
         {
-            {
-                "name": "pretrain_100k",
-                "path": "../../log/pretrain_100k_smiles.log",
-            },
+            "name": "pretrain_100k",
+            "path": "../../log/pretrain_100k_smiles.log",
         },
     ],
 }
