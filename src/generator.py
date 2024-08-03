@@ -20,8 +20,9 @@ class SequenceGenerator:
         self,
         models: Sequence[Model],
         pad_idx: int,
-        unk_idx: int,
+        bos_idx: int,
         eos_idx: int,
+        unk_idx: int,
         vocab_size: int,
         maxlen: int,
         beam_size: int = 1,
@@ -48,8 +49,9 @@ class SequenceGenerator:
         """
         self.models = models
         self.pad = pad_idx
-        self.unk = unk_idx
+        self.bos = bos_idx
         self.eos = eos_idx
+        self.unk = unk_idx
         self.vocab_size = vocab_size
         self.beam_size = beam_size
         self.minlen = minlen
@@ -173,7 +175,7 @@ class SequenceGenerator:
         scores_buf = scores.clone()
         tokens = src_tokens.data.new(bsz * beam_size, maxlen + 2).fill_(self.pad)
         tokens_buf = tokens.clone()
-        tokens[:, 0] = self.eos
+        tokens[:, 0] = self.bos
         attn, attn_buf = None, None
         nonpad_idxs = None
 
@@ -198,7 +200,9 @@ class SequenceGenerator:
                 buffers[name] = type_of.new()
             return buffers[name]
 
-        def is_finished(sent: int, step: int, unfinalized_scores: Optional[dict] = None) -> bool:
+        def is_finished(
+            sent: int, step: int, unfin_idx: int, unfinalized_scores: Optional[Tensor] = None
+        ) -> bool:
             """
             Check whether we've finished generation for a given sentence, by
             comparing the worst score among finalized hypotheses to the best
@@ -210,14 +214,14 @@ class SequenceGenerator:
                     return True
                 # stop if the best unfinalized score is worse than the worst
                 # finalized one
-                best_unfinalized_score = unfinalized_scores[sent].max()
+                best_unfinalized_score = unfinalized_scores[unfin_idx].max()
                 if self.normalize_scores:
                     best_unfinalized_score /= maxlen**self.len_penalty
                 if worst_finalized[sent]["score"] >= best_unfinalized_score:
                     return True
             return False
 
-        def finalize_hypos(step, bbsz_idx, eos_scores, unfinalized_scores=None):
+        def finalize_hypos(step, bbsz_idx, eos_scores, unfinalized_scores: Optional[Tensor] = None):
             """
             Finalize the given hypotheses at this step, while keeping the total
             number of finalized hypotheses per sentence <= beam_size.
@@ -237,7 +241,7 @@ class SequenceGenerator:
 
             # clone relevant token and attention tensors
             tokens_clone = tokens.index_select(0, bbsz_idx)
-            tokens_clone = tokens_clone[:, 1 : step + 2]  # skip the first index, which is EOS
+            tokens_clone = tokens_clone[:, 1 : step + 2]  # skip the first index, which is BOS
             tokens_clone[:, step] = self.eos
             attn_clone = (
                 attn.index_select(0, bbsz_idx)[:, :, 1 : step + 2] if attn is not None else None
@@ -305,7 +309,7 @@ class SequenceGenerator:
             newly_finished = []
             for sent, unfin_idx in sents_seen:
                 # check termination conditions for this sentence
-                if not finished[sent] and is_finished(sent, step, unfinalized_scores):
+                if not finished[sent] and is_finished(sent, step, unfin_idx, unfinalized_scores):
                     finished[sent] = True
                     newly_finished.append(unfin_idx)
             return newly_finished
@@ -640,8 +644,8 @@ class SequenceGenerator:
             if attn is not None:
                 attn = attn[:, -1, :]
 
-        print(tokens)
-        print(logits.argmax(dim=-1))
+        # print(tokens)
+        # print(logits.argmax(dim=-1))
         probs = logits
         # if log_probs:
         #     probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)

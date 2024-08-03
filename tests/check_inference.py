@@ -3,7 +3,7 @@ import sys
 sys.path.append("..")
 
 import torch
-import torch_npu
+# import torch_npu
 from rdkit import RDLogger
 from torch.utils.data import DataLoader
 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     # protein_tokenizer, smiles_tokenizer = share_vocab(protein_tokenizer, smiles_tokenizer)
 
     ckpt = torch.load(
-        "../checkpoints/basic_transformer_smiles_0710/model_epoch2_step52345.pt", map_location=device
+        "../checkpoints/0801basic_transformer_smiles_medium/model_epoch4_step70395.pt", map_location=device
     )
 
     dataset = MolInferDataset(
@@ -88,7 +88,7 @@ if __name__ == "__main__":
         [model],
         dataloader,
         tokenizer=mol_tokenizer,
-        max_len=10,
+        max_len=100,
         n_best=1,
         beam_size=1,
         min_len=1,

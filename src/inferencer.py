@@ -46,8 +46,9 @@ class Inferencer:
             model.make_generation_fast_(need_attn=print_alignment)
 
         pad_idx = tokenizer.vocab2index[tokenizer.pad]
-        unk_idx = tokenizer.vocab2index[tokenizer.unk]
         bos_idx = tokenizer.vocab2index[tokenizer.bos]
+        eos_idx = tokenizer.vocab2index[tokenizer.eos]
+        unk_idx = tokenizer.vocab2index[tokenizer.unk]
         vocab_size = tokenizer.vocab_size
 
         if device is None:
@@ -58,8 +59,9 @@ class Inferencer:
         self.translator = SequenceGenerator(
             models,
             pad_idx=pad_idx,
+            bos_idx = bos_idx,
+            eos_idx=eos_idx,
             unk_idx=unk_idx,
-            eos_idx=bos_idx,
             vocab_size=vocab_size,
             maxlen=max_len,
             minlen=min_len,
@@ -134,9 +136,12 @@ class Inferencer:
 
         for i in np.argsort(indices):
             result = results[i]
-            print(result.src_str, file=sys.stderr)
+            inp_array =result.src_str.numpy()
+            # print(f"Input {inp_array}")
+            print(f"Src\t{''.join(self.tokenizer.vec_ids2tokens(inp_array))}")
             for hypo, pos_scores, align in zip(result.hypos, result.pos_scores, result.alignments):
-                print(f"Score {hypo[0]}", file=sys.stderr)
-                print(hypo[1])
+                print(f"Score\t{hypo[0]}", file=sys.stderr)
+                print(f"Result\t{hypo[1]}")
                 if align is not None:
-                    print("align: ", align, file=sys.stderr)
+                    print(f"Align\t{align}")
+                print("----------------------------------------------------------")
