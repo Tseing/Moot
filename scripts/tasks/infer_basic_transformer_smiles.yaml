@@ -1,9 +1,7 @@
 # project
-data_format: "SMILES"
-src_col: "mol_a"
-tgt_col: "mol_b"
-word_table_path: "all/smiles_word_table.yaml"
 device: "cuda"
+word_table_path: "all/smiles_word_table.yaml"
+data_format: "SMILES"
 test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_smiles.csv"
 ckpt_path: "0801basic_transformer_smiles_medium/model_epoch4_step70395.pt"
 save_path: "0801basic_transformer_smiles_medium_top10.csv"

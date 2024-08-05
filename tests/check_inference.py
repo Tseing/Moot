@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from src.dataset import MolInferDataset
 from src.inferencer import Inferencer
-from src.model.crafted_transformer import Transformer
+from src.model.optformer import Transformer
 from src.tokenizer import SmilesTokenizer
 
 RDLogger.DisableLog("rdApp.*")

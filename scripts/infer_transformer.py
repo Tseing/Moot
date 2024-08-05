@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from src.dataset import MolInferDataset
 from src.inferencer import Inferencer
-from src.model.crafted_transformer import Transformer
+from src.model.optformer import Transformer
 from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
 from src.utils import Cfg
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
 
     dataset = MolInferDataset(
         osp.join(cfg.DATA_DIR, cfg.test_data_path),
-        (cfg.src_col, cfg.tgt_col),
+        ("mol_a", "mol_b"),
         tokenizer=mol_tokenizer,
     )
 

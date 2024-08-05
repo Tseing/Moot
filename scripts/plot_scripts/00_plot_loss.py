@@ -6,6 +6,10 @@ import matplotlib.pyplot as plt
 INFOS: Dict[str, list] = {
     "loss_smiles_transformer_18M.png": [
         {
+            "name": "tiny lr: [1.0e-6, 5.0e-5]",
+            "path": "../../log/0804basic_transformer_smiles_tiny_lr.log",
+        },
+        {
             "name": "medium lr: [1.0e-6, 1.0e-4]",
             "path": "../../log/0801basic_transformer_smiles_medium_lr.log",
         },
@@ -97,4 +101,4 @@ if __name__ == "__main__":
         )
 
     ax1.legend(loc="upper right")
-    plt.savefig(f"output/{file_name}", dpi=900)
+    plt.savefig(f"../../output/{file_name}", dpi=900)

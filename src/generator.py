@@ -1,5 +1,4 @@
 import math
-import pickle
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, cast
 
 import torch
@@ -7,11 +6,9 @@ import torch.nn.functional as F
 from jaxtyping import Float, Int
 from torch import Tensor
 from torch.cuda import amp
-from tqdm import tqdm
 
-from .model.crafted_transformer import IncrementalDecoder, Model
+from .model.optformer import IncrementalDecoder, Model
 from .typing import Device
-
 from .utils import move
 
 

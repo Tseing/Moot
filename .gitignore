@@ -1,6 +1,7 @@
 # Custom ignore
 .vscode/
 data/*
+data/all/*
 log/
 checkpoints/
 output/
@@ -8,7 +9,8 @@ scripts/data_scripts/deprecated
 scripts/plot_scripts/output
 *.ipynb
 *.pkl
-!data/word_table.yaml
+!data/all/
+!data/all/*.yaml
 
 # Ascend-compiled
 extra-info/

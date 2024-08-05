@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import nn
 
 sys.path.append("..")
-from ..src.model.crafted_transformer import IncrementalDecoder, Transformer
+from ..src.model.optformer import IncrementalDecoder, Transformer
 from ..src.tokenizer import StrTokenizer
 
 

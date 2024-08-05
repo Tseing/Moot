@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from .generator import SequenceGenerator
-from .model.crafted_transformer import Model
+from .model.optformer import Model
 from .tokenizer import StrTokenizer
 from .typing import Device
 from .utils import item, move

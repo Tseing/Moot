@@ -15,7 +15,6 @@ weight_decay: 1.0e-5
 batch_size: 64
 epoch_num: 5
 log_interval: 50
-seed: 42
 save_interval: 40
 
 # model
@@ -35,3 +34,4 @@ enc_relu_dropout: 0.1
 dec_relu_dropout: 0.1
 enc_attn_dropout: 0.15
 dec_attn_dropout: 0.15
+seed: 42

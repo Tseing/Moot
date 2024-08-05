@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.dataset import MolProtDataset
-from src.model.crafted_transformer import OptFormer
+from src.model.optformer import OptFormer
 from src.tokenizer import (
     ProteinTokenizer,
     SelfiesTokenizer,

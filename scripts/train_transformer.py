@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 
 from src.dataset import MMPDataset
 from src.metrics import SelfiesMetrics, SmilesMetrics
-from src.model.crafted_transformer import Transformer
+from src.model.optformer import Transformer
 from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
 from src.trainer import ModelSaver, ModelTrainer
 from src.utils import Cfg, Log, count_parameters, initialize_weights
