@@ -164,9 +164,9 @@ class SequenceGenerator:
 
             # TODO: replace by enc_forward()
             # compute the encoder output for each beam
-            print(src_tokens)
-            print(src_tokens.shape)
-            print(src_tokens.repeat(1, beam_size).view(-1, srclen).shape)
+            # print(src_tokens)
+            # print(src_tokens.shape)
+            # print(src_tokens.repeat(1, beam_size).view(-1, srclen).shape)
             encoder_out = model.encoder(src_tokens.repeat(1, beam_size).view(-1, srclen))
             encoder_outs.append(encoder_out)
 
@@ -316,9 +316,8 @@ class SequenceGenerator:
 
         reorder_state = None
         batch_idxs = None
-        for step in tqdm(
-            range(maxlen + 1), desc="Batch Generation"
-        ):  # one extra step for EOS marker
+        for step in range(maxlen + 1):
+            # one extra step for EOS marker
             # reorder decoder internal states based on the prev choice of beams
             if reorder_state is not None:
                 if batch_idxs is not None:

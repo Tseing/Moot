@@ -3,6 +3,7 @@
 data/*
 log/
 checkpoints/
+output/
 scripts/data_scripts/deprecated
 scripts/plot_scripts/output
 *.ipynb

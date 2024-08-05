@@ -1,12 +1,12 @@
-import os
-import sys
 from collections import namedtuple
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from .generator import SequenceGenerator
 from .model.crafted_transformer import Model
@@ -59,7 +59,7 @@ class Inferencer:
         self.translator = SequenceGenerator(
             models,
             pad_idx=pad_idx,
-            bos_idx = bos_idx,
+            bos_idx=bos_idx,
             eos_idx=eos_idx,
             unk_idx=unk_idx,
             vocab_size=vocab_size,
@@ -74,7 +74,7 @@ class Inferencer:
             sampling_topk=sampling_topk,
             sampling_temperature=sampling_temperature,
             use_amp=True,
-            device=device
+            device=device,
         )
 
         self.data_dl = data_loader
@@ -96,7 +96,7 @@ class Inferencer:
         for hypo in hypos[: min(len(hypos), self.nbest)]:
             hypo_tokens = hypo["tokens"].int().cpu()
             alignment = hypo["alignment"].int().cpu() if hypo["alignment"] is not None else None
-            hypo_str = "".join(self.tokenizer.vec_ids2tokens(hypo_tokens)).strip()
+            hypo_str = " ".join(self.tokenizer.vec_ids2tokens(hypo_tokens)).strip()
 
             result.hypos.append((hypo["score"], hypo_str))
             result.pos_scores.append(
@@ -125,23 +125,44 @@ class Inferencer:
 
         return [self.make_result(src[i], t) for i, t in enumerate(translations)]
 
-    def inference(self):
+    def inference(self, show: bool = True, save_path: Optional[str] = None) -> None:
         # for inputs in buffered_read(args.buffer_size, data_descriptor):
         indices = []
         results = []
-        for batch_indices, batch in enumerate(self.data_dl):
+        for batch_indices, batch in tqdm(enumerate(self.data_dl), desc="Inference", total=len(self.data_dl)):
             _, tgt = batch
             indices.extend([batch_indices] * tgt.shape[0])
             results += self.process_batch(batch)
 
+        if show:
+            self._show_result(indices, results)
+        else:
+            assert save_path is not None
+            self._write_result(indices, results, save_path)
+
+    def _show_result(self, indices: list, results: list) -> None:
         for i in np.argsort(indices):
             result = results[i]
-            inp_array =result.src_str.numpy()
+            inp_array = result.src_str.cpu().numpy()
             # print(f"Input {inp_array}")
-            print(f"Src\t{''.join(self.tokenizer.vec_ids2tokens(inp_array))}")
+            print(f"Src\t{' '.join(self.tokenizer.vec_ids2tokens(inp_array))}")
             for hypo, pos_scores, align in zip(result.hypos, result.pos_scores, result.alignments):
-                print(f"Score\t{hypo[0]}", file=sys.stderr)
+                print(f"Score\t{hypo[0]}")
                 print(f"Result\t{hypo[1]}")
                 if align is not None:
                     print(f"Align\t{align}")
-                print("----------------------------------------------------------")
+            print("----------------------------------------------------------")
+
+    def _write_result(self, indices: list, results: list, save_path: str) -> None:
+        inps = []
+        outps = []
+
+        for i in np.argsort(indices):
+            result = results[i]
+            inp_array = result.src_str.cpu().numpy()
+            inp = " ".join(self.tokenizer.vec_ids2tokens(self.tokenizer.trim(inp_array)))
+            inps.extend([inp] * self.nbest)
+            outps.extend([hypo[1] for hypo in result.hypos])
+
+        pd.DataFrame({"input": inps, "output": outps}).to_csv(save_path, index=False)
+        print(f"Inference results are saved in '{save_path}'.")

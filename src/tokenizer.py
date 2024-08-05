@@ -38,7 +38,12 @@ class BaseTokenizer(ABC):
         self.vocab2index = {w: i for i, w in enumerate(self.word_table)}
         self.vocab2token = {i: w for i, w in enumerate(self.word_table)}
         self.vocab_size = len(self.word_table)
-        self.special_tokens_id = [self.vocab2index[token] for token in self.special_tokens]
+
+        self.pad_id = self.vocab2index[self.pad]
+        self.bos_id = self.vocab2index[self.bos]
+        self.eos_id = self.vocab2index[self.eos]
+        self.unk_id = self.vocab2index[self.unk]
+        self.special_tokens_id = [self.pad_id, self.bos_id, self.eos_id, self.unk_id]
 
         self._vec_tokens2ids = np.vectorize(
             lambda token: self.vocab2index.get(token, self.vocab2index[self.unk])
@@ -139,6 +144,12 @@ class StrTokenizer(BaseTokenizer):
     def tokenize2str(self, seq: str) -> str:
         tokens = self._find_tokens(seq)
         return " ".join(tokens)
+
+    def trim(self, tokens: NDArray) -> NDArray:
+        mask = np.logical_or.reduce(
+            [tokens == self.bos_id, tokens == self.eos_id, tokens == self.pad_id]
+        )
+        return tokens[~mask]
 
 
 class SmilesTokenizer(StrTokenizer):

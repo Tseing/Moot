@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Any, List, Sequence, Tuple, Union, Iterable
+from typing import Any, Iterable, List, Sequence, Tuple, Union
 
 import numpy as np
 import selfies as sf
@@ -11,10 +11,11 @@ import yaml
 from jaxtyping import Bool, Float, Int
 from nltk.translate.chrf_score import sentence_chrf
 from numpy import ndarray
+from numpy.typing import NDArray
 from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from torch import Tensor, nn
-from numpy.typing import NDArray
+
 from .tokenizer import StrTokenizer
 from .typing import Device
 
@@ -196,14 +197,21 @@ class Log(logging.Logger):
 
 class Cfg:
     def __init__(self, scrip_dir: str = ".") -> None:
-        self._SCRIP_DIR = osp.abspath(scrip_dir)
-        self._TASK_DIR = osp.abspath(osp.join(self._SCRIP_DIR, "tasks"))
-        self._BASE_DIR = osp.abspath(osp.join(self._SCRIP_DIR, ".."))
-        self._DATA_DIR = osp.abspath(osp.join(self._BASE_DIR, "data"))
-        self._LOG_DIR = osp.abspath(osp.join(self._BASE_DIR, "log"))
-        self._CKPT_DIR = osp.abspath(osp.join(self._BASE_DIR, "checkpoints"))
+        self.__SCRIP_DIR = osp.abspath(scrip_dir)
+        self.__TASK_DIR = osp.abspath(osp.join(self.__SCRIP_DIR, "tasks"))
+        self.__BASE_DIR = osp.abspath(osp.join(self.__SCRIP_DIR, ".."))
+        self.__DATA_DIR = osp.abspath(osp.join(self.__BASE_DIR, "data"))
+        self.__LOG_DIR = osp.abspath(osp.join(self.__BASE_DIR, "log"))
+        self.__OUTPUT_DIR = osp.abspath(osp.join(self.__BASE_DIR, "output"))
+        self.__CKPT_DIR = osp.abspath(osp.join(self.__BASE_DIR, "checkpoints"))
 
-        necessary_dirs = [self._DATA_DIR, self._LOG_DIR, self._CKPT_DIR, self._TASK_DIR]
+        necessary_dirs = [
+            self.__DATA_DIR,
+            self.__LOG_DIR,
+            self.__OUTPUT_DIR,
+            self.__CKPT_DIR,
+            self.__TASK_DIR,
+        ]
         for folder in necessary_dirs:
             if not osp.exists(folder):
                 os.mkdir(folder)
@@ -216,19 +224,27 @@ class Cfg:
 
     @property
     def BASE_DIR(self):
-        return self._BASE_DIR
+        return self.__BASE_DIR
 
     @property
     def DATA_DIR(self):
-        return self._DATA_DIR
+        return self.__DATA_DIR
 
     @property
     def LOG_DIR(self):
-        return self._LOG_DIR
+        return self.__LOG_DIR
+
+    @property
+    def TASK_DIR(self):
+        return self.__TASK_DIR
 
     @property
     def CKPT_DIR(self):
-        return self._CKPT_DIR
+        return self.__CKPT_DIR
+
+    @property
+    def OUTPUT_DIR(self):
+        return self.__OUTPUT_DIR
 
     def _load_cli(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser()
@@ -236,7 +252,7 @@ class Cfg:
         return parser.parse_args()
 
     def _load_local(self, cfg_file: str) -> dict:
-        cfg_path = osp.join(self._TASK_DIR, cfg_file)
+        cfg_path = osp.join(self.TASK_DIR, cfg_file)
         cfg = yaml.load(open(cfg_path, "r", encoding="utf-8"), yaml.FullLoader)
         assert isinstance(cfg, dict), f"YAML file '{cfg_path}' is not a valid config file."
         f"Config file should be 'dict' structure, but got {type(cfg)}."
