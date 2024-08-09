@@ -1,14 +1,22 @@
+import multiprocessing
 import os
 import os.path as osp
 import pickle
 import random
-from typing import Optional, Tuple, Callable
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 import selfies as sf
 from rdkit import Chem
-from rdkit.Chem import Descriptors, rdFMCS
+from rdkit.Chem import Descriptors
+from tqdm import tqdm
 from typing_extensions import TypeAlias
+
+from .mmpdblib import smarts_aliases
+from .mmpdblib.fragment_algorithm import fragment_mol
+from .mmpdblib.fragment_records import parse_record
+from .mmpdblib.fragment_types import Fragmentation, FragmentOptions
 
 Mol: TypeAlias = Chem.rdchem.Mol
 
@@ -162,6 +170,10 @@ def cal_atoms_num(smiles: str) -> int:
     mol = Chem.AddHs(mol)
     return mol.GetNumAtoms()
 
+def get_atom_symbols(smi: str) -> set:
+    mol = Chem.MolFromSmiles(smi)
+    atoms = set([mol.GetAtomWithIdx(i).GetSymbol() for i in range(mol.GetNumAtoms())])
+    return atoms
 
 def cal_mol_weight(smiles: str) -> float:
     """_summary_
@@ -179,34 +191,6 @@ def cal_mol_weight(smiles: str) -> float:
     mol = Chem.MolFromSmiles(smiles)
     mw = Descriptors.MolWt(mol)
     return mw
-
-
-def is_1bond_mmp(smiles_a: str, smiles_b: str) -> bool:
-    """Judge whether 2 SMILES strings are Matched Molecular Pair or not.
-
-    Parameters
-    ----------
-    smiles_a : str
-        Inputted SMILES string A.
-    smiles_b : str
-        Inputted SMILES string B.
-
-    Returns
-    -------
-    bool
-        Whether 2 SMILES strings are Matched Molecular Pair or not.
-    """
-    mol_a = Chem.MolFromSmiles(smiles_a)
-    mol_b = Chem.MolFromSmiles(smiles_b)
-    mcs = rdFMCS.FindMCS([mol_a, mol_b])
-    m_cut_a = Chem.ReplaceCore(mol_a, mcs)
-    m_cut_b = Chem.ReplaceCore(mol_b, mcs)
-    num_dummy_a = sum([True if atom.GetAtomicNum() == 0 else False for atom in m_cut_a.GetAtoms()])
-    num_dummy_b = sum([True if atom.GetAtomicNum() == 0 else False for atom in m_cut_b.GetAtoms()])
-    if 1 == num_dummy_a and 1 == num_dummy_b:
-        return True
-    else:
-        return False
 
 
 class LookupDict:
@@ -278,3 +262,159 @@ class SMILESDict(LookupDict):
         self, df: pd.DataFrame, cols: Optional[Tuple[str, str]] = ("chembl_id", "smiles")
     ) -> None:
         return super()._read_df(df, cols)
+
+
+@dataclass
+class MMPRecord:
+    const_smiles: str
+    const_heavy: int
+    frag_a_smiles: str
+    frag_a_heavy: int
+    frag_b_smiles: str
+    frag_b_heavy: int
+
+    def parse_list(self) -> list:
+        return [
+            self.const_smiles,
+            self.const_heavy,
+            self.frag_a_smiles,
+            self.frag_a_heavy,
+            self.frag_b_smiles,
+            self.frag_b_heavy,
+        ]
+
+
+class MMPChecker:
+    """Options:
+    --max-up-enumerations N         Maximum number of up-enumerations (default:
+                                    1000)
+    --min-heavies-total-const-frag N
+                                    Ignore fragmentations where there are fewer
+                                    than N heavy atoms in the total constant
+                                    fragment  (default:
+                                    {OPTS.min_heavies_total_const_frag})
+    --min-heavies-per-const-frag N  Ignore fragmentations where one or more
+                                    constant fragments have fewer than N heavy
+                                    atoms (default: 0)
+    --num-cuts [1|2|3]              Number of cuts to use (default: 3)
+    --cut-rgroup-file FILENAME      Read R-group SMILES from the named file
+    --cut-rgroup SMILES             Cut on the attachment point for the given
+                                    R-group SMILES
+    --cut-smarts SMARTS             Alternate SMARTS pattern to use for cutting
+                                    (default: '[#6+0;!$(*=,#[!#6])]!@!=!#[!#0;!#
+                                    1;!$([CH2]);!$([CH3][CH2])]'), or use one
+                                    of: 'default', 'cut_AlkylChains',
+                                    'cut_Amides', 'cut_all', 'exocyclic',
+                                    'exocyclic_NoMethyl'
+    --salt-remover FILENAME         File containing RDKit SaltRemover
+                                    definitions. The default ('<default>') uses
+                                    RDKit's standard salt remover. Use '<none>'
+                                    to not remove salts.
+    --rotatable-smarts SMARTS       SMARTS pattern to detect rotatable bonds
+                                    (default: '[!$([NH]!@C(=O))&!D1&!$(*#*)]-&!@
+                                    [!$([NH]!@C(=O))&!D1&!$(*#*)]')
+    --max-rotatable-bonds N         Maximum number of rotatable bonds (default:
+                                    10)
+    --max-heavies N                 Maximum number of non-hydrogen atoms, or
+                                    'none' (default: 100)
+    --help                          Show this message and exit.
+
+    The --cut-smarts argument supports the following short-hand aliases:
+    'default': Cut all C-[!H] non-ring single bonds except for Amides/Esters/Amidines/Sulfonamides and CH2-CH2 and CH2-CH3 bonds
+        smarts: [#6+0;!$(*=,#[!#6])]!@!=!#[!#0;!#1;!$([CH2]);!$([CH3][CH2])]
+    'cut_AlkylChains': As default, but also cuts CH2-CH2 and CH2-CH3 bonds
+        smarts: [#6+0;!$(*=,#[!#6])]!@!=!#[!#0;!#1]
+    'cut_Amides': As default, but also cuts [O,N]=C-[O,N] single bonds
+        smarts: [#6+0]!@!=!#[!#0;!#1;!$([CH2]);!$([CH3][CH2])]
+    'cut_all': Cuts all Carbon-[!H] single non-ring bonds. Use carefully, this will create a lot of cuts
+        smarts: [#6+0]!@!=!#[!#0;!#1]
+    'exocyclic': Cuts all exocyclic single bonds
+        smarts: [R]!@!=!#[!#0;!#1]
+    'exocyclic_NoMethyl': Cuts all exocyclic single bonds apart from those connecting to CH3 groups
+        smarts: [R]!@!=!#[!#0;!#1;!$([CH3])]
+    """
+
+    def __init__(self, cache_path: Optional[str] = None) -> None:
+        frag_options = FragmentOptions(
+            max_heavies=100,
+            max_rotatable_bonds=10,
+            rotatable_smarts="[!$([NH]!@C(=O))&!D1&!$(*#*)]-&!@[!$([NH]!@C(=O))&!D1&!$(*#*)]",
+            cut_smarts=smarts_aliases.cut_smarts_aliases_by_name["default"].smarts,
+            num_cuts=1,
+            method="chiral",
+            salt_remover="<default>",
+            min_heavies_per_const_frag=0,
+            min_heavies_total_const_frag=0,
+            max_up_enumerations=1000,
+        )
+        self.mol_filter = frag_options.get_fragment_filter()
+        if cache_path is not None:
+            self.cache = pickle.load(open(cache_path, "rb"))
+        else:
+            self.cache = {}
+
+    def check_mmp(self, smiles_a: str, smiles_b: str) -> Optional[MMPRecord]:
+        frag_record_a = self.cache[smiles_a] if smiles_a in self.cache else self.frag(smiles_a)
+        frag_record_b = self.cache[smiles_b] if smiles_b in self.cache else self.frag(smiles_b)
+
+        if None in (frag_record_a, frag_record_b):
+            return None
+
+        common_consts = list(set(frag_record_a.keys()).intersection(set(frag_record_b.keys())))
+        if len(common_consts) == 0:
+            return None
+        const_heavies = [
+            frag_record_a[frag_const].constant_num_heavies for frag_const in common_consts
+        ]
+        max_const, const_heavy = max(zip(common_consts, const_heavies), key=lambda x: x[1])
+        const_smiles = frag_record_a[max_const].constant_smiles
+
+        frag_a, frag_a_heavy = (
+            frag_record_a[max_const].variable_smiles,
+            frag_record_a[max_const].variable_num_heavies,
+        )
+        frag_b, frag_b_heavy = (
+            frag_record_b[max_const].variable_smiles,
+            frag_record_b[max_const].variable_num_heavies,
+        )
+
+        return MMPRecord(const_smiles, const_heavy, frag_a, frag_a_heavy, frag_b, frag_b_heavy)
+
+    def cache_records(self, smiles_list: List[str], save_path: str, worker: int = 10) -> None:
+        pool = multiprocessing.Pool(worker)
+        pbar = tqdm(total=len(smiles_list))
+        seen = set(self.cache.keys())
+        record_keys = []
+        results = []
+        for smiles in smiles_list:
+            if smiles in seen:
+                pbar.update(1)
+                continue
+
+            seen.add(smiles)
+            result = pool.apply_async(self.frag, (smiles,), callback=lambda _: pbar.update(1))
+            results.append(result)
+            record_keys.append(smiles)
+
+        pool.close()
+        pool.join()
+
+        records = [result.get() for result in results]
+        new_cache = dict(zip(record_keys, records))
+        self.cache.update(new_cache)
+
+        pickle.dump(self.cache, open(save_path, "wb"))
+
+    def frag(
+        self, smiles: str, chembl_id: Optional[str] = None
+    ) -> Optional[Dict[str, Fragmentation]]:
+        error_msg, mol_record = parse_record(chembl_id, smiles, self.mol_filter)
+        if error_msg is not None:
+            frags_record = None
+        else:
+            frags = fragment_mol(mol_record.normalized_mol, self.mol_filter, mol_record.num_normalized_heavies)
+            frags_record = {
+                f"{frag.constant_smiles}.{frag.attachment_order}": frag for frag in frags
+            }
+
+        return frags_record
