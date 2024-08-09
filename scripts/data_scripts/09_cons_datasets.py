@@ -1,16 +1,16 @@
 import os
 import os.path as osp
+import pickle
 import sys
 from typing import Tuple, Union, cast
 
+sys.path.append("../..")
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from terminaltables import AsciiTable
 from tqdm import tqdm
 from typing_extensions import TypeGuard
-
-sys.path.append("../..")
 
 from src.data_utils import LookupDict, split_path
 
@@ -124,6 +124,7 @@ class DatasetSplit:
         idxes = dict(zip(self.names, (train_idx, val_idx, test_idx)))
         datasets = {name: self.df.iloc[idxes[name]] for name in self.names}
         self.datasets = datasets
+        self.split_idxes = idxes
         self.summary()
 
     def dump(self, save_dir: str) -> None:
@@ -136,6 +137,7 @@ class DatasetSplit:
         for name in self.names:
             self.datasets[name].to_csv(save_paths[name], index=False)
             print(f"{name} {self.datasets[name].shape}: '{save_paths[name]}'.")
+        pickle.dump(self.split_idxes, open(osp.join(save_dir, "split_idxes.pkl"), "wb"))
 
     def summary(self) -> None:
         table_data = [["Dataset", "Unique Items", "Nan Items", "Shape"]]
@@ -163,12 +165,10 @@ class DatasetSplit:
         return dataset_info
 
 
-def split_finetune_dataset():
-    dataset_split = DatasetSplit(
-        "../../data/finetune/runtime/chembl_id/finetune.csv",
-    )
-    dataset_split.split((0.8, 0.1, 0.1))
-    dataset_split.dump("../../data/finetune/runtime/chembl_id")
+def split_dataset(total_csv_path: str, save_dir: str, seed: int = 0):
+    dataset_split = DatasetSplit(total_csv_path)
+    dataset_split.split((0.8, 0.1, 0.1), seed)
+    dataset_split.dump(save_dir)
 
 
 def fetch_finetune_smiles(
@@ -219,10 +219,14 @@ def fetch_finetune_smiles_selfies_pipeline(dataset_dir: str, save_dir: str) -> N
 
 if __name__ == "__main__":
     # fetch_item_by_chembl_id(
-    #     "../../data/finetune/permed_mmp.csv", "../../data/finetune/runtime/finetune.csv"
+    #     "../../data/finetune/permed_mmp.csv", "../../data/pretrain/pretrain.csv"
     # )
-    # split_finetune_dataset()
+    split_dataset(
+        "../../data/pretrain/pretrain_nonan.csv",
+        "../../data/pretrain/runtime/chembl_id_seed_0",
+        seed=0,
+    )
     fetch_finetune_smiles_selfies_pipeline(
-        "../../data/finetune/runtime/chembl_id_seed_0",
-        "../../data/finetune/runtime/datasets_seed_0",
+        "../../data/pretrain/runtime/chembl_id_seed_0",
+        "../../data/pretrain/runtime/datasets_seed_0",
     )

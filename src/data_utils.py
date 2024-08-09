@@ -337,12 +337,12 @@ class MMPChecker:
     def __init__(self, cache_path: Optional[str] = None) -> None:
         frag_options = FragmentOptions(
             max_heavies=100,
-            max_rotatable_bonds=10,
+            max_rotatable_bonds=20,
             rotatable_smarts="[!$([NH]!@C(=O))&!D1&!$(*#*)]-&!@[!$([NH]!@C(=O))&!D1&!$(*#*)]",
             cut_smarts=smarts_aliases.cut_smarts_aliases_by_name["default"].smarts,
             num_cuts=1,
             method="chiral",
-            salt_remover="<default>",
+            salt_remover="<none>",
             min_heavies_per_const_frag=0,
             min_heavies_total_const_frag=0,
             max_up_enumerations=1000,
@@ -383,7 +383,7 @@ class MMPChecker:
     def cache_records(self, smiles_list: List[str], save_path: str, worker: int = 10) -> None:
         pool = multiprocessing.Pool(worker)
         pbar = tqdm(total=len(smiles_list))
-        seen = set(self.cache.keys())
+        seen = {k if self.cache[k] is not None else "" for k in self.cache}
         record_keys = []
         results = []
         for smiles in smiles_list:
