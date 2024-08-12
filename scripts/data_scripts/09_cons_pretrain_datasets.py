@@ -171,7 +171,7 @@ def split_dataset(total_csv_path: str, save_dir: str, seed: int = 0):
     dataset_split.dump(save_dir)
 
 
-def fetch_finetune_smiles(
+def fetch_smiles(
     df_path: str, save_path: str, smiles_dict: LookupDict, prot_dict: LookupDict
 ) -> None:
     tqdm.pandas()
@@ -184,7 +184,7 @@ def fetch_finetune_smiles(
     df.to_csv(save_path, index=False)
 
 
-def fetch_finetune_selfies(
+def fetch_selfies(
     df_path: str, save_path: str, selfies_dict: LookupDict, prot_dict: LookupDict
 ) -> None:
     tqdm.pandas()
@@ -197,10 +197,10 @@ def fetch_finetune_selfies(
     df.to_csv(save_path, index=False)
 
 
-def fetch_finetune_smiles_selfies_pipeline(dataset_dir: str, save_dir: str) -> None:
+def fetch_smiles_selfies_pipeline(dataset_dir: str, save_dir: str) -> None:
     smiles_dict = LookupDict("../../data/all/smiles_lookup.pkl")
     selfies_dict = LookupDict("../../data/all/selfies_lookup.pkl")
-    prot_dict = LookupDict("../../data/finetune/all_prot_seq_less1495.csv")
+    prot_dict = LookupDict("../../data/dep_finetune/all_prot_seq_less1495.csv")
     file_names = list(filter(lambda s: s.endswith(".csv"), os.listdir(dataset_dir)))
     file_paths = [osp.join(dataset_dir, file_name) for file_name in file_names]
     smiles_save_paths = [
@@ -211,9 +211,9 @@ def fetch_finetune_smiles_selfies_pipeline(dataset_dir: str, save_dir: str) -> N
     ]
 
     for i, file in enumerate(file_paths):
-        fetch_finetune_smiles(file, smiles_save_paths[i], smiles_dict, prot_dict)
+        fetch_smiles(file, smiles_save_paths[i], smiles_dict, prot_dict)
         print(f"'{smiles_save_paths[i]}' is saved.")
-        fetch_finetune_selfies(file, selfies_save_paths[i], selfies_dict, prot_dict)
+        fetch_selfies(file, selfies_save_paths[i], selfies_dict, prot_dict)
         print(f"'{selfies_save_paths[i]}' is saved.")
 
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
         "../../data/pretrain/runtime/chembl_id_seed_0",
         seed=0,
     )
-    fetch_finetune_smiles_selfies_pipeline(
+    fetch_smiles_selfies_pipeline(
         "../../data/pretrain/runtime/chembl_id_seed_0",
         "../../data/pretrain/runtime/datasets_seed_0",
     )
