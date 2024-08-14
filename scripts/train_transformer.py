@@ -74,6 +74,8 @@ if __name__ == "__main__":
         num_workers=20,
     )
 
+    logger.info(f"Train steps per epoch: {len(train_dl)}. Val steps per epoch {len(val_dataset)}.")
+
     vocab_size = mol_tokenizer.vocab_size
     pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
 
