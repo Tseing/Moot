@@ -1,14 +1,15 @@
 # project
+task_name: "infer_transformer_smiles"
 device: "cuda"
 word_table_path: "all/smiles_word_table.yaml"
 data_format: "SMILES"
 test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_smiles.csv"
-ckpt_path: "0801basic_transformer_smiles_medium/model_epoch4_step70395.pt"
-save_path: "0801basic_transformer_smiles_medium_top10.csv"
+ckpt_path: "0815finetune_transformer_smiles/model_epoch5_step0.pt"
+save_path: "0815finetune_transformer_smiles_top1.csv"
 
 # infer
-n_best: 10
-beam_size: 10
+n_best: 1
+beam_size: 5
 # default infer config
 batch_size: 64
 infer_max_len: 100

@@ -264,3 +264,8 @@ class Cfg:
         assert cli_cfg is not None, "Cannot fetch any command line config."
         cfg_file = cli_cfg.cfg_file
         self._cfg = self._load_local(cfg_file)
+
+    def set(self, key: str, value: Any) -> None:
+        if key in self._cfg.keys():
+            raise AttributeError(f"Key '{key}' is in configs and its value is '{self._cfg[key]}'.")
+        self._cfg[key] = value

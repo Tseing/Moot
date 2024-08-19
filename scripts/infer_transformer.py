@@ -10,9 +10,9 @@ from torch.utils.data import DataLoader
 
 from src.dataset import MolInferDataset
 from src.inferencer import Inferencer
-from src.model.optformer import Transformer
+from src.launcher import ModelLauncher
 from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
-from src.utils import Cfg
+from src.utils import Cfg, Log
 
 if __name__ == "__main__":
     RDLogger.DisableLog("rdApp.*")
@@ -20,7 +20,8 @@ if __name__ == "__main__":
     cfg = Cfg()
     cfg.parse()
 
-    print(f"Config:\n{repr(cfg)}")
+    logger = Log("train", osp.join(cfg.LOG_DIR, f"{cfg.task_name}.log"))
+    logger.info(f"Config:\n{repr(cfg)}")
 
     mol_tokenizer: Optional[StrTokenizer] = None
     if cfg.data_format == "SMILES":
@@ -34,11 +35,6 @@ if __name__ == "__main__":
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
     device = torch.device(cfg.device)
 
-    ckpt = torch.load(
-        osp.join(cfg.CKPT_DIR, cfg.ckpt_path),
-        map_location=device,
-    )
-
     dataset = MolInferDataset(
         osp.join(cfg.DATA_DIR, cfg.test_data_path),
         ("mol_a", "mol_b"),
@@ -46,38 +42,16 @@ if __name__ == "__main__":
     )
 
     print(f"Tokenizer vocab size: {mol_tokenizer.vocab_size}.")
-    vocab_size = mol_tokenizer.vocab_size
-    pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
-    pad_fn = lambda data: dataset.pad_batch(data, pad_value, left_pad=cfg.infer_left_pad)
+    cfg.set("vocab_size", mol_tokenizer.vocab_size)
+    cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
+    pad_fn = lambda data: dataset.pad_batch(data, cfg.pad_value, left_pad=cfg.infer_left_pad)
 
     dataloader = DataLoader(
         dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=20, collate_fn=pad_fn
     )
 
-    model = Transformer(
-        d_model=cfg.d_model,
-        n_head=cfg.n_head,
-        enc_n_layer=cfg.enc_n_layer,
-        dec_n_layer=cfg.dec_n_layer,
-        enc_d_ffn=cfg.d_enc_ffn,
-        dec_d_ffn=cfg.d_dec_ffn,
-        enc_dropout=cfg.enc_dropout,
-        dec_dropout=cfg.dec_dropout,
-        enc_embed_dropout=cfg.enc_embed_dropout,
-        dec_embed_dropout=cfg.dec_embed_dropout,
-        enc_relu_dropout=cfg.enc_relu_dropout,
-        dec_relu_dropout=cfg.dec_relu_dropout,
-        enc_attn_dropout=cfg.enc_attn_dropout,
-        dec_attn_dropout=cfg.dec_attn_dropout,
-        vocab_size=vocab_size,
-        padding_idx=pad_value,
-        left_pad=cfg.left_pad,
-        max_len=cfg.max_len,
-        device=device,
-        seed=cfg.seed,
-    ).to(device)
-
-    model.load_state_dict(ckpt["model"])
+    launcher = ModelLauncher(cfg, logger, "inference", device)
+    model = launcher.get_model()
 
     inferencer = Inferencer(
         [model],

@@ -1,0 +1,43 @@
+# project
+task_name: "infer_transformer_selfies"
+device: "cuda"
+word_table_path: "all/selfies_word_table.yaml"
+data_format: "SELFIES"
+test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_selfies.csv"
+ckpt_path: "0814pretrain_transformer_selfies_medium_lr/model_epoch5_step0.pt"
+save_path: "0814pretrain_transformer_selfies_top1.csv"
+
+# infer
+n_best: 1
+beam_size: 5
+# default infer config
+batch_size: 64
+infer_max_len: 100
+infer_min_len: 1
+infer_left_pad: False
+stop_early: False
+normalize_scores: True
+len_penalty: 1
+unk_penalty: 0
+sampling: False
+sampling_topk: -1
+sampling_temperature: 1
+
+# model
+max_len: 250
+left_pad: False
+d_model: 512
+n_head: 8
+d_enc_ffn: 1024
+d_dec_ffn: 1024
+enc_n_layer: 3
+dec_n_layer: 4
+enc_dropout: 0.2
+dec_dropout: 0.2
+enc_embed_dropout: 0.15
+dec_embed_dropout: 0.15
+enc_relu_dropout: 0.1
+dec_relu_dropout: 0.1
+enc_attn_dropout: 0.15
+dec_attn_dropout: 0.15
+seed: 42

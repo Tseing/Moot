@@ -11,6 +11,7 @@ scripts/plot_scripts/output
 *.pkl
 !data/all/
 !data/all/*.yaml
+archived/
 
 # Ascend-compiled
 extra-info/
