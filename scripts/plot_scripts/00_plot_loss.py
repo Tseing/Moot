@@ -30,10 +30,24 @@ INFOS: Dict[str, list] = {
             "path": "../../log/0806salt_basic_transformer_selfies_medium_lr.log",
         },
     ],
-    "loss_smiles_pretrain_19M.png": [
+    "loss_pretrain_19M.png": [
         {
-            "name": "medium lr: [1.0e-6, 1.0e-4]",
+            "name": "SMILES: [1.0e-6, 1.0e-4]",
             "path": "../../log/0812pretrain_transformer_smiles_medium_lr.log",
+        },
+        {
+            "name": "SELFIES: [1.0e-6, 1.0e-4]",
+            "path": "../../log/0814pretrain_transformer_selfies_medium_lr.log",
+        },
+    ],
+    "loss_finetune_19M.png": [
+        {
+            "name": "SMILES: [1.0e-6, 5.0e-6]",
+            "path": "../../log/0815finetune_transformer_smiles.log",
+        },
+        {
+            "name": "SELFIES: [1.0e-6, 5.0e-6]",
+            "path": "../../log/0819finetune_transformer_selfies.log",
         },
     ],
 }
@@ -46,7 +60,7 @@ def find_values(keyword: str, content: str, fn: Callable[[str], Any]) -> List[An
 
 
 if __name__ == "__main__":
-    file_name = "loss_smiles_pretrain_19M.png"
+    file_name = "loss_finetune_19M.png"
     logs = INFOS[file_name]
 
     values = []
