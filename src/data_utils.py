@@ -3,13 +3,15 @@ import os
 import os.path as osp
 import pickle
 import random
+import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, TypeVar
 
 import pandas as pd
 import selfies as sf
-from rdkit import Chem
-from rdkit.Chem import Descriptors
+from rdkit import Chem, RDConfig
+from rdkit.Chem import DataStructs, Descriptors, MACCSkeys, PandasTools, Scaffolds
 from tqdm import tqdm
 from typing_extensions import TypeAlias
 
@@ -18,7 +20,13 @@ from .mmpdblib.fragment_algorithm import fragment_mol
 from .mmpdblib.fragment_records import parse_record
 from .mmpdblib.fragment_types import Fragmentation, FragmentOptions
 
+sys.path.append(os.path.join(RDConfig.RDContribDir, "SA_Score"))
+
+import sascorer
+
 Mol: TypeAlias = Chem.rdchem.Mol
+T = TypeVar("T")
+U = TypeVar("U")
 
 
 def split_path(path: str) -> Tuple[str, str]:
@@ -153,6 +161,15 @@ def smiles2selfies(smiles: str) -> Optional[str]:
     return selfies
 
 
+def selfies2smiles(selfies: str) -> Optional[str]:
+    try:
+        smiles = sf.decoder(selfies)
+    except:
+        return None
+
+    return canonicalize_smiles(smiles)
+
+
 def cal_atoms_num(smiles: str) -> int:
     """_summary_
 
@@ -170,10 +187,12 @@ def cal_atoms_num(smiles: str) -> int:
     mol = Chem.AddHs(mol)
     return mol.GetNumAtoms()
 
+
 def get_atom_symbols(smi: str) -> set:
     mol = Chem.MolFromSmiles(smi)
     atoms = set([mol.GetAtomWithIdx(i).GetSymbol() for i in range(mol.GetNumAtoms())])
     return atoms
+
 
 def cal_mol_weight(smiles: str) -> float:
     """_summary_
@@ -412,9 +431,132 @@ class MMPChecker:
         if error_msg is not None:
             frags_record = None
         else:
-            frags = fragment_mol(mol_record.normalized_mol, self.mol_filter, mol_record.num_normalized_heavies)
+            frags = fragment_mol(
+                mol_record.normalized_mol, self.mol_filter, mol_record.num_normalized_heavies
+            )
             frags_record = {
                 f"{frag.constant_smiles}.{frag.attachment_order}": frag for frag in frags
             }
 
         return frags_record
+
+
+def skip_null(func: Callable[[T], U]) -> Callable[[Optional[T]], Optional[U]]:
+    def wrapper(*args, **kwargs):
+        if None in args or None in kwargs.values():
+            return None
+        else:
+            res = func(*args, **kwargs)
+            return res
+
+    return wrapper
+
+
+class Metrics(ABC):
+    tqdm.pandas()
+
+    @abstractmethod
+    def visual(self) -> None:
+        raise NotImplementedError
+
+    @staticmethod
+    def render_romol(df: pd.DataFrame) -> None:
+        PandasTools.molRepresentation = "svg"
+        PandasTools.ChangeMoleculeRendering(df)
+
+    @staticmethod
+    def get_mol(smiles: Optional[str]) -> Optional[Mol]:
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+        except:
+            return None
+        return mol
+
+    @staticmethod
+    @skip_null
+    def get_sascore(mol: Mol) -> float:
+        return sascorer.calculateScore(mol)
+
+    @staticmethod
+    @skip_null
+    def get_qed(mol: Mol) -> float:
+        return Descriptors.qed(mol)
+
+    @staticmethod
+    @skip_null
+    def get_weight(mol: Mol) -> float:
+        return Descriptors.MolWt(mol)
+
+    @staticmethod
+    @skip_null
+    def get_scaffold(mol: Mol) -> str:
+        return Chem.MolToSmiles(Scaffolds.MurckoScaffold.GetScaffoldForMol(mol))
+
+    @staticmethod
+    @skip_null
+    def get_similarity(mol_a: Mol, mol_b: Mol) -> float:
+        fp_a, fp_b = tuple(MACCSkeys.GenMACCSKeys(mol) for mol in (mol_a, mol_b))
+        return DataStructs.TanimotoSimilarity(fp_a, fp_b)
+
+    def cano_smiles(self, col: str):
+        return self.df[col].progress_apply(canonicalize_smiles)
+
+    def cano_selfies(self, col: str):
+        return self.df[col].progress_apply(selfies2smiles)
+
+    def metric_mol(self, col: str) -> pd.Series:
+        return self.df[col].progress_apply(self.get_mol)
+
+    def metric_heavy(self, col: str) -> pd.Series:
+        return self.df[col].astype('int32')
+
+    def metric_sascore(self, col: str) -> pd.Series:
+        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_sascore(s)))
+
+    def metric_qed(self, col: str) -> pd.Series:
+        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_qed(s)))
+
+    def metric_weight(self, col: str) -> pd.Series:
+        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_weight(s)))
+
+    def metric_scaffold(self, col: str) -> pd.Series:
+        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_scaffold(s)))
+
+    def metric_frag_sim(self, col_a: str, col_b: str) -> pd.Series:
+        return self.df.progress_apply(
+            lambda df: self.get_similarity(self.get_mol(df[col_a]), self.get_mol(df[col_b])), axis=1
+        )
+
+    def metric_frag_prop(self, frag_col: str, core_col: str) -> pd.Series:
+        return self.df[frag_col] / self.df[core_col]
+
+
+class DatasetMetrics(Metrics):
+    def __init__(self, df: pd.DataFrame) -> None:
+        assert "src" in df.columns and "tgt" in df.columns
+        self.df = df
+        self.render_romol(self.df)
+
+    def visual(self, save_path: str, nrows: int = -1) -> None:
+        visual_df = self.df[
+            ["src", "tgt", "core", "frag_a", "frag_b", "core_heavy", "frag_a_heavy", "frag_b_heavy"]
+        ]
+
+        if nrows != -1:
+            visual_df = visual_df.iloc[:nrows]
+
+        self.render_romol(visual_df)
+        smiles_cols = ["src", "tgt", "core", "frag_a", "frag_b"]
+        for col in smiles_cols:
+            visual_df[f"{col}_romol"] = visual_df[col].progress_apply(self.get_mol)
+
+        visual_df.to_html(save_path)
+
+
+# class ResultMetrics(ABC):
+#     def __init__(self, df: pd.DataFrame) -> None:
+#         assert "src" in df.columns and "tgt" is df.columns
+#         self.df = df
+
+#     def __gen_romol(self):
+#         ...

@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:236060edbeb0c2b26006e79371eff3166112da9da1b2839e86dfbccc617f7df0"
+content_hash = "sha256:6f0990f00efb970917bba2a111c3f76aa702867fd29dd39aff2ff896edd751de"
 
 [[package]]
 name = "attrs"
@@ -530,7 +530,7 @@ files = [
 
 [[package]]
 name = "rdkit"
-version = "2023.9.5"
+version = "2024.3.5"
 summary = "A collection of chemoinformatics and machine-learning software written in C++ and Python"
 groups = ["default"]
 dependencies = [
@@ -538,11 +538,11 @@ dependencies = [
     "numpy",
 ]
 files = [
-    {file = "rdkit-2023.9.5-cp39-cp39-macosx_10_13_x86_64.whl", hash = "sha256:4b848fbdc44f26d817963f90389af55b294d6b9efd07f20146255443fbcf6718"},
-    {file = "rdkit-2023.9.5-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:443593f5e0ab119f09c63aed00b6739f5e6c8f617a0028e1e81036784fe96e47"},
-    {file = "rdkit-2023.9.5-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c267b5a6135b58c2cbd2846d61b4663b75496a883e1ccd46eb3bff1098f53bf7"},
-    {file = "rdkit-2023.9.5-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:8a7b39f1a98505017d6dd6876a592449cf76d718f370efd00e0ca6d80479812c"},
-    {file = "rdkit-2023.9.5-cp39-cp39-win_amd64.whl", hash = "sha256:1b99cca22cad650392b25db1f8f86cae619fa62c6a710eb173d0e10faec9d2e5"},
+    {file = "rdkit-2024.3.5-cp39-cp39-macosx_10_13_x86_64.whl", hash = "sha256:cf2747e7c82d6c90a8a631fe063d24d77b31f535e0f8a17ac9dbfbe4ab456886"},
+    {file = "rdkit-2024.3.5-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:e69cec14cbb42c5ca912346b594d3f6a7aac572463949c55c7749da257e68123"},
+    {file = "rdkit-2024.3.5-cp39-cp39-manylinux_2_28_aarch64.whl", hash = "sha256:7c91c5ccbf8d51cd3dd894bf770ca99da5fe37714f6e2a66016e8af4f57d2b56"},
+    {file = "rdkit-2024.3.5-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:316bb5273bff5be76d4e5b0def998455e9b1a20898df44548b0e299f90786cb2"},
+    {file = "rdkit-2024.3.5-cp39-cp39-win_amd64.whl", hash = "sha256:90376467f4988ee44f3f47d1e558ffc27646254a99fe65d19a7d9a123e832ef2"},
 ]
 
 [[package]]
