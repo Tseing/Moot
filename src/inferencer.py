@@ -141,7 +141,7 @@ class Inferencer:
             self._write_result(indices, results, save_path)
 
     def _show_result(self, indices: list, results: list) -> None:
-        for i in np.argsort(indices):
+        for i, _ in enumerate(np.argsort(indices)):
             result = results[i]
             inp_array = result.src_str.cpu().numpy()
             # print(f"Input {inp_array}")
@@ -157,7 +157,7 @@ class Inferencer:
         inps = []
         outps = []
 
-        for i in np.argsort(indices):
+        for i, _ in enumerate(indices):
             result = results[i]
             inp_array = result.src_str.cpu().numpy()
             inp = " ".join(self.tokenizer.vec_ids2tokens(self.tokenizer.trim(inp_array)))

@@ -32,7 +32,7 @@ if __name__ == "__main__":
     enc_attn_dropout = 0.15
     dec_attn_dropout = 0.15
 
-    device = torch.device("cpu")
+    device = torch.device("cuda")
 
     mol_tokenizer = SmilesTokenizer()
     mol_tokenizer.load_word_table("../data/all/smiles_word_table.yaml")
@@ -40,14 +40,14 @@ if __name__ == "__main__":
     # protein_tokenizer, smiles_tokenizer = share_vocab(protein_tokenizer, smiles_tokenizer)
 
     ckpt = torch.load(
-        "../checkpoints/0801basic_transformer_smiles_medium/model_epoch4_step70395.pt", map_location=device
+        "../checkpoints/0812pretrain_transformer_smiles_medium_lr/model_epoch5_step0.pt", map_location=device
     )
 
     dataset = MolInferDataset(
         "../data/finetune/runtime/datasets_seed_0/finetune_test_smiles.csv",
         ("mol_a", "mol_b"),
         tokenizer=mol_tokenizer,
-        nrows=16,
+        nrows=200,
     )
 
     print(f"Tokenizer vocab size: {mol_tokenizer.vocab_size}.")
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     pad_fn = lambda data: dataset.pad_batch(data, pad_value, left_pad=left_pad)
 
     dataloader = DataLoader(
-        dataset, batch_size=16, shuffle=False, num_workers=20, collate_fn=pad_fn
+        dataset, batch_size=4, shuffle=False, num_workers=20, collate_fn=pad_fn
     )
 
     model = Transformer(
@@ -90,7 +90,7 @@ if __name__ == "__main__":
         tokenizer=mol_tokenizer,
         max_len=100,
         n_best=2,
-        beam_size=2,
+        beam_size=5,
         min_len=1,
         stop_early=False,
         normalize_scores=True,
@@ -102,4 +102,4 @@ if __name__ == "__main__":
         device=device,
     )
 
-    inferencer.inference()
+    inferencer.inference(show=False, save_path="")
