@@ -85,7 +85,7 @@ if __name__ == "__main__":
     rdBase.DisableLog("rdApp.*")
     tqdm.pandas()
     check_out_mmp(
-        gen_path="../../output/finetune/0815finetune_transformer_smiles_top1.csv",
-        gen_format="SMILES",
-        save_path="../../output/finetune/0815finetune_transformer_smiles_top1_mmp.csv",
+        gen_path="../../output/finetune/0819finetune_epoch10_transformer_selfies_top1.csv",
+        gen_format="SELFIES",
+        save_path="../../output/finetune/0819finetune_epoch10_transformer_selfies_top1_mmp.csv",
     )
