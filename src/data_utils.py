@@ -6,12 +6,13 @@ import random
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import Callable, Dict, List, Literal, Optional, Tuple, TypeVar
 
 import pandas as pd
 import selfies as sf
 from rdkit import Chem, RDConfig
 from rdkit.Chem import DataStructs, Descriptors, MACCSkeys, PandasTools, Scaffolds
+from terminaltables import AsciiTable
 from tqdm import tqdm
 from typing_extensions import TypeAlias
 
@@ -425,8 +426,11 @@ class MMPChecker:
         pickle.dump(self.cache, open(save_path, "wb"))
 
     def frag(
-        self, smiles: str, chembl_id: Optional[str] = None
+        self, smiles: Optional[str], chembl_id: Optional[str] = None
     ) -> Optional[Dict[str, Fragmentation]]:
+        if smiles is None:
+            return None
+
         error_msg, mol_record = parse_record(chembl_id, smiles, self.mol_filter)
         if error_msg is not None:
             frags_record = None
@@ -453,6 +457,9 @@ def skip_null(func: Callable[[T], U]) -> Callable[[Optional[T]], Optional[U]]:
 
 
 class Metrics(ABC):
+    EXPECTED_COLS: List[str]
+    SMILES_COLS: List[str]
+    df: pd.DataFrame
     tqdm.pandas()
 
     @abstractmethod
@@ -498,17 +505,17 @@ class Metrics(ABC):
         fp_a, fp_b = tuple(MACCSkeys.GenMACCSKeys(mol) for mol in (mol_a, mol_b))
         return DataStructs.TanimotoSimilarity(fp_a, fp_b)
 
-    def cano_smiles(self, col: str):
-        return self.df[col].progress_apply(canonicalize_smiles)
+    def cano_smiles(self, col: str) -> None:
+        self.df[col] = self.df[col].progress_apply(canonicalize_smiles)
 
-    def cano_selfies(self, col: str):
-        return self.df[col].progress_apply(selfies2smiles)
+    def cano_selfies(self, col: str) -> None:
+        self.df[col] = self.df[col].progress_apply(selfies2smiles)
 
     def metric_mol(self, col: str) -> pd.Series:
         return self.df[col].progress_apply(self.get_mol)
 
     def metric_heavy(self, col: str) -> pd.Series:
-        return self.df[col].astype('int32')
+        return self.df[col].astype("int32")
 
     def metric_sascore(self, col: str) -> pd.Series:
         return self.df[col].progress_apply(lambda s: self.get_mol(self.get_sascore(s)))
@@ -530,33 +537,135 @@ class Metrics(ABC):
     def metric_frag_prop(self, frag_col: str, core_col: str) -> pd.Series:
         return self.df[frag_col] / self.df[core_col]
 
-
-class DatasetMetrics(Metrics):
-    def __init__(self, df: pd.DataFrame) -> None:
-        assert "src" in df.columns and "tgt" in df.columns
-        self.df = df
-        self.render_romol(self.df)
-
     def visual(self, save_path: str, nrows: int = -1) -> None:
-        visual_df = self.df[
-            ["src", "tgt", "core", "frag_a", "frag_b", "core_heavy", "frag_a_heavy", "frag_b_heavy"]
-        ]
+        visual_df = self.df[self.EXPECTED_COLS]
 
         if nrows != -1:
             visual_df = visual_df.iloc[:nrows]
 
         self.render_romol(visual_df)
-        smiles_cols = ["src", "tgt", "core", "frag_a", "frag_b"]
-        for col in smiles_cols:
+        for col in self.SMILES_COLS:
             visual_df[f"{col}_romol"] = visual_df[col].progress_apply(self.get_mol)
 
         visual_df.to_html(save_path)
 
 
-# class ResultMetrics(ABC):
-#     def __init__(self, df: pd.DataFrame) -> None:
-#         assert "src" in df.columns and "tgt" is df.columns
-#         self.df = df
+class DatasetMetrics(Metrics):
+    EXPECTED_COLS = [
+        "src",
+        "tgt",
+        "core",
+        "frag_a",
+        "frag_b",
+        "core_heavy",
+        "frag_a_heavy",
+        "frag_b_heavy",
+    ]
+    SMILES_COLS = ["src", "tgt", "core", "frag_a", "frag_b"]
 
-#     def __gen_romol(self):
-#         ...
+    def __init__(self, df: pd.DataFrame) -> None:
+        assert set(df.columns.to_list()) == set(
+            self.EXPECTED_COLS
+        ), f"Expected DataFrame with columns {self.EXPECTED_COLS} but got {df.columns.to_list()}."
+        self.df = df.reindex(columns=self.EXPECTED_COLS)
+        self.render_romol(self.df)
+
+
+class ResultMetrics(Metrics):
+    EXPECTED_COLS = [
+        "src",
+        "tgt",
+        "core",
+        "frag_a",
+        "frag_b",
+        "out",
+        "gen_core",
+        "gen_frag_a",
+        "gen_frag_b",
+        "gen_core_heavy",
+        "gen_frag_a_heavy",
+        "gen_frag_b_heavy",
+    ]
+    SMILES_COLS = [
+        "src",
+        "tgt",
+        "core",
+        "frag_a",
+        "frag_b",
+        "out",
+        "gen_core",
+        "gen_frag_a",
+        "gen_frag_b",
+    ]
+
+    def __init__(
+        self, df: pd.DataFrame, data_format: Literal["SMILES", "SELFIES"] = "SMILES", topk: int = 1
+    ) -> None:
+        assert set(df.columns.to_list()) == set(
+            self.EXPECTED_COLS
+        ), f"Expected DataFrame with columns {self.EXPECTED_COLS} but got {df.columns.to_list()}."
+        assert df.shape[0] % topk == 0, f"DataFrame with shape {df.shape} cannot be divided by topk `{topk}`."
+        self.df = df.reindex(columns=self.EXPECTED_COLS)
+        self.render_romol(self.df)
+        self.data_format = data_format
+        self.topk = topk
+        self.result_group = self.df.shape[0] // topk
+
+    def concat_tokens(self) -> None:
+        self.df["src"] = self.df["src"].progress_apply(lambda s: "".join(s.strip().split(" ")))
+        self.df["out"] = self.df["out"].progress_apply(
+            lambda s: "".join(s.strip("{eos}").strip().split(" "))
+        )
+        if self.data_format == "SELFIES":
+            self.df["src"] = self.df["src"].progress_apply(selfies2smiles)
+            self.df["out"] = self.df["out"].progress_apply(selfies2smiles)
+
+    def visual(self, save_path: str, nrows: int = -1) -> None:
+        self.concat_tokens()
+        return super().visual(save_path, nrows)
+
+    def basic_metric(self) -> None:
+        # Validity, MMP Validity, Recovery, Uniqueness, Novelty
+        self.concat_tokens()
+        self.cano_smiles("out")
+        size = self.df.shape[0]
+
+        validity = len(self.df["out"].dropna()) / size
+        mmp_validity = len(self.df["gen_core"].dropna()) / size
+        strict_recovery = (self.df["out"] == self.df["tgt"]).sum() / size
+
+        groups = self.df.groupby("src")
+        recovery_dict = {group[0]: frozenset(group[1]["tgt"].to_list()) for group in groups}
+        recovery_cnt = 0
+        for i in range(self.result_group):
+            unique_out = set(self.df["out"][i : i + self.topk].to_list())
+            if unique_out & recovery_dict[self.df["src"][i]]:
+                recovery_cnt += 1
+
+        recovery = recovery_cnt / self.result_group
+
+        core_recovery = (self.df["gen_core"] == self.df["core"]).sum() / size
+        frag_a_recovery = (self.df["gen_frag_a"] == self.df["frag_a"]).sum() / size
+        frag_b_recovery = (self.df["gen_frag_b"] == self.df["frag_b"]).sum() / size
+
+        uniqueness = len(self.df["out"].dropna().drop_duplicates()) / size
+        unique_tgt = set(self.df["tgt"].drop_duplicates().to_list())
+        novel_out = self.df["out"].apply(lambda s: 1 if s in unique_tgt else 0)
+        novelty = novel_out.sum() / size
+
+        metric_infos = [
+            ["Metrics", "Value"],
+            ["Mol Validity", f"{validity:.4f}"],
+            ["MMP Validity", f"{mmp_validity:.4f}"],
+            ["Strict Recovery", f"{strict_recovery:.4f}"],
+            ["Recovery", f"{recovery:.4f}"],
+            ["Core Recovery", f"{core_recovery:.4f}"],
+            ["Truncated Frag Recovery", f"{frag_a_recovery:.4f}"],
+            ["Spliced Frag Recovery", f"{frag_b_recovery:.4f}"],
+            ["Uniqueness", f"{uniqueness:.4f}"],
+            ["Novelty", f"{novelty:.4f}"],
+        ]
+        table = AsciiTable(metric_infos)
+        table.title = f"Basic Metrics (Total: {size})"
+        table.inner_row_border = True
+        print(table.table)

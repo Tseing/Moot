@@ -1,3 +1,4 @@
+import os.path as osp
 import pickle
 
 import pandas as pd
@@ -26,12 +27,30 @@ class DataReader:
         return metric_df
 
     @staticmethod
-    def prepara_inp_df(dataset: str) -> pd.DataFrame:
+    def prepare_inp_df(dataset: str) -> pd.DataFrame:
         data_path, idx_pkl_path = CONFIGS[dataset]
         idx_key = dataset.split("_")[-1]
         idxes = pickle.load(open(idx_pkl_path, "rb"))
         return DataReader.__prepare_df(data_path, DataReader.INP_MMP_PATH, idxes[idx_key])
 
+    @staticmethod
+    def prepare_out_df(data_path: str, topk: int) -> pd.DataFrame:
+        gen_df = pd.read_csv(data_path)
+        gen_df.columns = ["src", "out"]
+
+        inp_df = DataReader.prepare_inp_df("finetune_test")
+        inp_df = inp_df[["tgt", "core", "frag_a", "frag_b"]]
+
+        assert gen_df.shape[0] == inp_df.shape[0] * topk
+        if topk != 1:
+            inp_df = inp_df.loc[inp_df.index.repeat(topk)].set_index(gen_df.index)
+
+        mmp_path = f"{osp.splitext(data_path)[0]}_mmp.csv"
+        mmp_df = pd.read_csv(mmp_path)
+
+        assert gen_df.shape[0] == mmp_df.shape[0]
+        df = pd.concat([inp_df, gen_df, mmp_df], axis=1)
+        return df
 
 CONFIGS = {
     "pretrain_train": (
