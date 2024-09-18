@@ -73,6 +73,13 @@ def pad_sequence(
     return padded_tokens
 
 
+def pad_sequences(
+    seqs: Iterable[Int[ndarray, "seq"]], pad_value: int, left_pad: bool
+) -> Int[ndarray, "bsz batch_max_len"]:
+    max_len = maxlen(seqs)
+    return np.stack([pad_sequence(seq, max_len, pad_value, left_pad) for seq in seqs])
+
+
 def check_seq(
     src: Int[Tensor, "seq_len"],
     output: Float[Tensor, "seq_len vocab_size"],
