@@ -54,13 +54,12 @@ if __name__ == "__main__":
 
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
     prot_tokenizer = ProteinTokenizer()
-    prot_tokenizer, mol_tokenizer = share_vocab(prot_tokenizer, mol_tokenizer)
+    tokenizer, _ = share_vocab(prot_tokenizer, mol_tokenizer)
 
     train_dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
         ("mol_a", "mol_b", "sequence"),
-        mol_tokenizer=mol_tokenizer,
-        prot_tokenizer=prot_tokenizer,
+        tokenizer=tokenizer,
         mol_max_len=cfg.mol_max_len,
         prot_max_len=cfg.prot_max_len,
         left_pad=cfg.left_pad,
@@ -69,8 +68,7 @@ if __name__ == "__main__":
     val_dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
         ("mol_a", "mol_b", "sequence"),
-        mol_tokenizer=mol_tokenizer,
-        prot_tokenizer=prot_tokenizer,
+        tokenizer=tokenizer,
         mol_max_len=cfg.mol_max_len,
         prot_max_len=cfg.prot_max_len,
         left_pad=cfg.left_pad,
@@ -91,8 +89,8 @@ if __name__ == "__main__":
 
     logger.info(f"Train steps per epoch: {len(train_dl)}. Val steps per epoch {len(val_dataset)}.")
 
-    cfg.set("vocab_size", mol_tokenizer.vocab_size)
-    cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
+    cfg.set("vocab_size", tokenizer.vocab_size)
+    cfg.set("pad_value", tokenizer.vocab2index[tokenizer.pad])
 
     launcher = ModelLauncher("Optformer", cfg, logger, "train", device)
     model = launcher.get_model()
@@ -104,12 +102,13 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss(ignore_index=cfg.pad_value)
 
     if cfg.data_format == "SMILES":
-        metrics = SmilesMetrics(mol_tokenizer)
+        metrics = SmilesMetrics(tokenizer)
     elif cfg.data_format == "SELFIES":
-        metrics = SelfiesMetrics(mol_tokenizer)
+        metrics = SelfiesMetrics(tokenizer)
     else:
         assert False, (
-            f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.data_format}'."
+            f"Config 'data_format' should be 'SMILES' or 'SELFIES', "
+            f"but got '{cfg.data_format}'."
         )
 
     saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=cfg.save_interval)
@@ -122,7 +121,7 @@ if __name__ == "__main__":
         criterion=criterion,
         metrics=metrics,
         saver=saver,
-        tokenizer=mol_tokenizer,
+        tokenizer=tokenizer,
         device=device,
         logger=logger,
         log_interval=cfg.log_interval,

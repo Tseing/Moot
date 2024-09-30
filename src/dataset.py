@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union, cast
+from typing import Callable, List, Optional, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from typing_extensions import TypeGuard
 
-from .tokenizer import StrTokenizer
+from .tokenizer import MolTokenizer, ProteinTokenizer
 from .typing import Input, Target
 from .utils import pad_sequence, pad_sequences
 
@@ -52,15 +52,19 @@ class PairDataset(Dataset):
     ) -> Tuple[Union[tuple, Int[Tensor, "bsz ..."]], Int[Tensor, "bsz ..."]]:
         raise NotImplementedError
 
+    @property
+    def collate_fn(self) -> Optional[Callable]:
+        return self.pad_batch_fn if self.pad_batch else None
+
 
 class MolPairDataset(PairDataset):
     def __init__(
         self,
         data_path: str,
         data_cols: Tuple[str, str],
-        tokenizer: StrTokenizer,
+        tokenizer: MolTokenizer,
         max_len: Optional[int],
-        left_pad: Optional[bool],
+        left_pad: bool,
         pad_batch: bool,
         dtype: DTypeLike = np.int32,
         **kwargs,
@@ -70,19 +74,15 @@ class MolPairDataset(PairDataset):
         self.pad_batch = pad_batch
 
         if pad_batch:
-            assert max_len is None and left_pad is None, (
-                f"`max_len` is '{max_len}' and `left_pad` is '{left_pad}'"
-                f"when `pad_batch` is '{pad_batch}'"
-            )
+            assert max_len is None, f"`max_len` is '{max_len}' when `pad_batch` is '{pad_batch}'"
 
         else:
-            assert max_len is not None or left_pad is not None, (
-                f"`max_len` is '{max_len}' and `left_pad` is '{left_pad}'"
-                f"when `pad_batch` is '{pad_batch}'"
-            )
-            self.left_pad: TypeGuard[bool] = left_pad
+            assert (
+                max_len is not None
+            ), f"`max_len` is '{max_len}' when `pad_batch` is '{pad_batch}'"
             self.max_len: TypeGuard[int] = max_len
 
+        self.left_pad = left_pad
         self.pad_value = tokenizer.vocab2index[tokenizer.pad]
 
     def transform(self, row: NDArray) -> Tuple[Input, Target]:
@@ -115,10 +115,10 @@ class MolProtPairDataset(PairDataset):
         self,
         data_path: str,
         data_cols: Tuple[str, str, str],
-        mol_tokenizer: StrTokenizer,
-        prot_tokenizer: StrTokenizer,
-        mol_max_len: int,
-        prot_max_len: int,
+        mol_tokenizer: MolTokenizer,
+        prot_tokenizer: ProteinTokenizer,
+        mol_max_len: Optional[int],
+        prot_max_len: Optional[int],
         left_pad: bool,
         pad_batch: bool,
         dtype: DTypeLike = np.int32,
@@ -130,22 +130,21 @@ class MolProtPairDataset(PairDataset):
         self.pad_batch = pad_batch
 
         if pad_batch:
-            assert mol_max_len is None and prot_max_len is None and left_pad is None, (
+            assert mol_max_len is None and prot_max_len is None, (
                 f"`mol_max_len` is '{mol_max_len}', `prot_max_len` is '{prot_max_len}' "
-                f"and `left_pad` is '{left_pad}' when `pad_batch` is '{pad_batch}'"
+                f"when `pad_batch` is '{pad_batch}'"
             )
 
         else:
-            assert mol_max_len is not None or prot_max_len is not None or left_pad is not None, (
+            assert mol_max_len is not None or prot_max_len is not None, (
                 f"`mol_max_len` is '{mol_max_len}', `prot_max_len` is '{prot_max_len}' "
-                f"and `left_pad` is '{left_pad}' when `pad_batch` is '{pad_batch}'"
+                f"when `pad_batch` is '{pad_batch}'"
             )
-            self.left_pad: TypeGuard[bool] = left_pad
             self.mol_max_len = mol_max_len
             self.prot_max_len = prot_max_len
 
-        self.mol_pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
-        self.prot_pad_value = prot_tokenizer.vocab2index[prot_tokenizer.pad]
+        self.left_pad = left_pad
+        self.pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
 
     def transform(self, row: NDArray) -> Tuple[Input, Target]:
         mol, tgt, prot = row
@@ -159,15 +158,9 @@ class MolProtPairDataset(PairDataset):
 
     def pad_transform(self, data: Tuple[Input, Target]) -> Tuple[Input, Target]:
         (tokenized_mol, tokenized_prot), tokenized_tgt = data
-        padded_mol = pad_sequence(
-            tokenized_mol, self.mol_max_len, self.mol_pad_value, self.left_pad
-        )
-        padded_prot = pad_sequence(
-            tokenized_prot, self.prot_max_len, self.prot_pad_value, self.left_pad
-        )
-        padded_tgt = pad_sequence(
-            tokenized_tgt, self.mol_max_len, self.mol_pad_value, self.left_pad
-        )
+        padded_mol = pad_sequence(tokenized_mol, self.mol_max_len, self.pad_value, self.left_pad)
+        padded_prot = pad_sequence(tokenized_prot, self.prot_max_len, self.pad_value, self.left_pad)
+        padded_tgt = pad_sequence(tokenized_tgt, self.mol_max_len, self.pad_value, self.left_pad)
 
         return (padded_mol, padded_prot), padded_tgt
 
@@ -178,8 +171,8 @@ class MolProtPairDataset(PairDataset):
         srcs, tgts = tuple(zip(*data))
         mols, prots = tuple(zip(*srcs))
 
-        padded_mols = torch.tensor(pad_sequences(mols, self.mol_pad_value, self.left_pad))
-        padded_prots = torch.tensor(pad_sequences(prots, self.prot_pad_value, self.left_pad))
-        padded_tgts = torch.tensor(pad_sequences(tgts, self.mol_pad_value, self.left_pad))
+        padded_mols = torch.tensor(pad_sequences(mols, self.pad_value, self.left_pad))
+        padded_prots = torch.tensor(pad_sequences(prots, self.pad_value, self.left_pad))
+        padded_tgts = torch.tensor(pad_sequences(tgts, self.pad_value, self.left_pad))
 
         return (padded_mols, padded_prots), padded_tgts
