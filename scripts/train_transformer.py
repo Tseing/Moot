@@ -12,12 +12,12 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 
-from src.dataset import MMPDataset
+from src.dataset import MolPairDataset
+from src.launcher import ModelLauncher
 from src.metrics import SelfiesMetrics, SmilesMetrics
-from src.model.optformer import Transformer
 from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
 from src.trainer import ModelSaver, ModelTrainer
-from src.utils import Cfg, Log, count_parameters, initialize_weights
+from src.utils import Cfg, Log
 
 if __name__ == "__main__":
     RDLogger.DisableLog("rdApp.*")
@@ -43,23 +43,25 @@ if __name__ == "__main__":
         mol_tokenizer = SelfiesTokenizer()
     else:
         assert False, (
-            f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
+            f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.data_format}'."
         )
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
 
-    train_dataset = MMPDataset(
+    train_dataset = MolPairDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
-        max_len=cfg.max_len,
+        ("mol_a", "mol_b"),
         tokenizer=mol_tokenizer,
+        max_len=cfg.max_len,
         left_pad=cfg.left_pad,
-        usecols=["mol_a", "mol_b"],
+        pad_batch=False,
     )
-    val_dataset = MMPDataset(
+    val_dataset = MolPairDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
-        max_len=cfg.max_len,
+        ("mol_a", "mol_b"),
         tokenizer=mol_tokenizer,
+        max_len=cfg.max_len,
         left_pad=cfg.left_pad,
-        usecols=["mol_a", "mol_b"],
+        pad_batch=False,
     )
     train_dl = DataLoader(
         train_dataset,
@@ -76,41 +78,17 @@ if __name__ == "__main__":
 
     logger.info(f"Train steps per epoch: {len(train_dl)}. Val steps per epoch {len(val_dataset)}.")
 
-    vocab_size = mol_tokenizer.vocab_size
-    pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
+    cfg.set("vocab_size", mol_tokenizer.vocab_size)
+    cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
 
-    model = Transformer(
-        d_model=cfg.d_model,
-        n_head=cfg.n_head,
-        enc_n_layer=cfg.enc_n_layer,
-        dec_n_layer=cfg.dec_n_layer,
-        enc_d_ffn=cfg.d_enc_ffn,
-        dec_d_ffn=cfg.d_dec_ffn,
-        enc_dropout=cfg.enc_dropout,
-        dec_dropout=cfg.dec_dropout,
-        enc_embed_dropout=cfg.enc_embed_dropout,
-        dec_embed_dropout=cfg.dec_embed_dropout,
-        enc_relu_dropout=cfg.enc_relu_dropout,
-        dec_relu_dropout=cfg.dec_relu_dropout,
-        enc_attn_dropout=cfg.enc_attn_dropout,
-        dec_attn_dropout=cfg.dec_attn_dropout,
-        vocab_size=vocab_size,
-        padding_idx=pad_value,
-        left_pad=cfg.left_pad,
-        max_len=cfg.max_len,
-        device=device,
-        seed=cfg.seed,
-    ).to(device)
-
-    logger.info(f"The model has {count_parameters(model):,} trainable parameters")
-    logger.info(model)
-    model.apply(initialize_weights)
+    launcher = ModelLauncher("Transformer", cfg, logger, "train", device)
+    model = launcher.get_model()
 
     optimizer = Adam(params=model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     scheduler = CosineAnnealingWarmRestarts(
         optimizer=optimizer, T_0=750, T_mult=2, eta_min=cfg.min_learning_rate
     )
-    criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
+    criterion = nn.CrossEntropyLoss(ignore_index=cfg.pad_value)
 
     if cfg.data_format == "SMILES":
         metrics = SmilesMetrics(mol_tokenizer)

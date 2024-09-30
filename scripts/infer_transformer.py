@@ -8,7 +8,7 @@ import torch
 from rdkit import RDLogger
 from torch.utils.data import DataLoader
 
-from src.dataset import MolInferDataset
+from src.dataset import MolPairDataset
 from src.inferencer import Inferencer
 from src.launcher import ModelLauncher
 from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
@@ -35,22 +35,24 @@ if __name__ == "__main__":
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
     device = torch.device(cfg.device)
 
-    dataset = MolInferDataset(
+    dataset = MolPairDataset(
         osp.join(cfg.DATA_DIR, cfg.test_data_path),
         ("mol_a", "mol_b"),
         tokenizer=mol_tokenizer,
+        max_len=cfg.max_len,
+        left_pad=cfg.left_pad,
+        pad_batch=True
     )
 
     print(f"Tokenizer vocab size: {mol_tokenizer.vocab_size}.")
     cfg.set("vocab_size", mol_tokenizer.vocab_size)
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
-    pad_fn = lambda data: dataset.pad_batch(data, cfg.pad_value, left_pad=cfg.infer_left_pad)
-
+    pad_fn = dataset.pad_batch_fn if dataset.pad_batch else None
     dataloader = DataLoader(
         dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=20, collate_fn=pad_fn
     )
 
-    launcher = ModelLauncher(cfg, logger, "inference", device)
+    launcher = ModelLauncher("Transformer", cfg, logger, "inference", device)
     model = launcher.get_model()
 
     inferencer = Inferencer(
