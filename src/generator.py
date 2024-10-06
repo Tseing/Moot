@@ -124,6 +124,7 @@ class SequenceGenerator:
     def generate(
         self,
         src_tokens: Int[Tensor, "bsz seq_len"],
+        extra_inp: Optional[tuple] = None,
         beam_size: Optional[int] = None,
         maxlen: Optional[int] = None,
         prefix_tokens=None,
@@ -131,11 +132,12 @@ class SequenceGenerator:
         """Generate a batch of translations."""
         with torch.no_grad():
             with amp.autocast(enabled=self.use_amp):
-                return self._generate(src_tokens, beam_size, maxlen, prefix_tokens)
+                return self._generate(src_tokens, extra_inp, beam_size, maxlen, prefix_tokens)
 
     def _generate(
         self,
         src_tokens: Int[Tensor, "bsz seq_len"],
+        extra_inp: Optional[tuple],
         beam_size: Optional[int] = None,
         maxlen: Optional[int] = None,
         prefix_tokens=None,
@@ -164,7 +166,21 @@ class SequenceGenerator:
             # print(src_tokens)
             # print(src_tokens.shape)
             # print(src_tokens.repeat(1, beam_size).view(-1, srclen).shape)
-            encoder_out = model.encoder(src_tokens.repeat(1, beam_size).view(-1, srclen))
+            if extra_inp:
+                repeated_extra_inp = (
+                    (
+                        inp.repeat(1, beam_size).view(-1, inp.shape[-1])
+                        if isinstance(inp, Tensor)
+                        else inp
+                    )
+                    for inp in extra_inp
+                )
+                encoder_out = model.enc_forward(
+                    src_tokens.repeat(1, beam_size).view(-1, srclen), *repeated_extra_inp
+                )
+            else:
+                encoder_out = model.enc_forward(src_tokens.repeat(1, beam_size).view(-1, srclen))
+
             encoder_outs.append(encoder_out)
 
         # initialize buffers
@@ -347,6 +363,8 @@ class SequenceGenerator:
             probs[:, self.unk] -= self.unk_penalty  # apply unk penalty
 
             # Record attention scores
+            # FIXME: there is bug in attn calculation
+            avg_attn_scores = None
             if avg_attn_scores is not None:
                 if attn is None:
                     attn = scores.new(bsz * beam_size, src_tokens.size(1), maxlen + 2)

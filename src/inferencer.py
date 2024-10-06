@@ -103,30 +103,41 @@ class Inferencer:
                 "P\t" + " ".join(f"{x:.4f}" for x in hypo["positional_scores"].tolist())
             )
             result.alignments.append(
-                "A\t" + " ".join(str(item(x)) for x in alignment) if self.print_alignment else None
+                "A\t" + " ".join(str(item(x)) for x in alignment) if alignment and self.print_alignment else None
             )
 
         return result
 
     def process_batch(self, batch: Tuple[Tuple[Tensor, ...], Tensor]):
-        inp, _ = batch
-        inp = move(inp, self.device)
+        src, _ = batch
+        src = move(src, self.device)
+
+        if isinstance(src, Tensor):
+            inp = src
+            extra_inp = None
+        elif isinstance(src, tuple):
+            inp = src[0]
+            extra_inp = src[1:]
+        else:
+            assert False, f"Unsupported input type: {type(src)}."
 
         translations = self.translator.generate(
             inp,
+            extra_inp,
             maxlen=self.max_len,
         )
 
-        # TODO: Handle multi input situation
-        if isinstance(inp, Tensor):
-            src = inp
-        else:
-            src = inp[0]
+        # # TODO: Handle multi input situation
+        # if isinstance(inp, Tensor):
+        #     src = inp
+        # else:
+        #     src = inp[0]
 
-        return [self.make_result(src[i], t) for i, t in enumerate(translations)]
+        return [self.make_result(inp[i], t) for i, t in enumerate(translations)]
 
     def inference(self, show: bool = True, save_path: Optional[str] = None) -> None:
         # for inputs in buffered_read(args.buffer_size, data_descriptor):
+        # TODO: Optimize memory with reading / writing chunk
         indices = []
         results = []
         for batch_indices, batch in tqdm(enumerate(self.data_dl), desc="Inference", total=len(self.data_dl)):
