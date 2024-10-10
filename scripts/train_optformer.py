@@ -12,10 +12,16 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 
-from src.dataset import MolPairDataset
+from src.dataset import MolProtPairDataset
 from src.launcher import ModelLauncher
 from src.metrics import SelfiesMetrics, SmilesMetrics
-from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
+from src.tokenizer import (
+    ProteinTokenizer,
+    SelfiesTokenizer,
+    SmilesTokenizer,
+    StrTokenizer,
+    share_vocab,
+)
 from src.trainer import ModelSaver, ModelTrainer
 from src.utils import Cfg, Log
 
@@ -45,21 +51,26 @@ if __name__ == "__main__":
         assert False, (
             f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
         )
-    mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
 
-    train_dataset = MolPairDataset(
+    mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
+    prot_tokenizer = ProteinTokenizer()
+    tokenizer, _ = share_vocab(prot_tokenizer, mol_tokenizer)
+
+    train_dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
-        ("mol_a", "mol_b"),
-        tokenizer=mol_tokenizer,
-        max_len=cfg.max_len,
+        ("mol_a", "mol_b", "sequence"),
+        tokenizer=tokenizer,
+        mol_max_len=cfg.mol_max_len,
+        prot_max_len=cfg.prot_max_len,
         left_pad=cfg.left_pad,
         pad_batch=False,
     )
-    val_dataset = MolPairDataset(
+    val_dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
-        ("mol_a", "mol_b"),
-        tokenizer=mol_tokenizer,
-        max_len=cfg.max_len,
+        ("mol_a", "mol_b", "sequence"),
+        tokenizer=tokenizer,
+        mol_max_len=cfg.mol_max_len,
+        prot_max_len=cfg.prot_max_len,
         left_pad=cfg.left_pad,
         pad_batch=False,
     )
@@ -78,25 +89,26 @@ if __name__ == "__main__":
 
     logger.info(f"Train steps per epoch: {len(train_dl)}. Val steps per epoch {len(val_dataset)}.")
 
-    vocab_size = mol_tokenizer.vocab_size
-    pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
+    cfg.set("vocab_size", tokenizer.vocab_size)
+    cfg.set("pad_value", tokenizer.vocab2index[tokenizer.pad])
 
-    launcher = ModelLauncher("Transformer", cfg, logger, "finetune", device)
+    launcher = ModelLauncher("Optformer", cfg, logger, "train", device)
     model = launcher.get_model()
 
     optimizer = Adam(params=model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     scheduler = CosineAnnealingWarmRestarts(
         optimizer=optimizer, T_0=750, T_mult=2, eta_min=cfg.min_learning_rate
     )
-    criterion = nn.CrossEntropyLoss(ignore_index=pad_value)
+    criterion = nn.CrossEntropyLoss(ignore_index=cfg.pad_value)
 
     if cfg.data_format == "SMILES":
-        metrics = SmilesMetrics(mol_tokenizer)
+        metrics = SmilesMetrics(tokenizer)
     elif cfg.data_format == "SELFIES":
-        metrics = SelfiesMetrics(mol_tokenizer)
+        metrics = SelfiesMetrics(tokenizer)
     else:
         assert False, (
-            f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
+            f"Config 'data_format' should be 'SMILES' or 'SELFIES', "
+            f"but got '{cfg.data_format}'."
         )
 
     saver = ModelSaver(save_dir, len(train_dl), model_num_per_epoch=cfg.save_interval)
@@ -109,7 +121,7 @@ if __name__ == "__main__":
         criterion=criterion,
         metrics=metrics,
         saver=saver,
-        tokenizer=mol_tokenizer,
+        tokenizer=tokenizer,
         device=device,
         logger=logger,
         log_interval=cfg.log_interval,

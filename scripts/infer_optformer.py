@@ -8,10 +8,16 @@ import torch
 from rdkit import RDLogger
 from torch.utils.data import DataLoader
 
-from src.dataset import MolPairDataset
+from src.dataset import MolProtPairDataset
 from src.inferencer import Inferencer
 from src.launcher import ModelLauncher
-from src.tokenizer import SelfiesTokenizer, SmilesTokenizer, StrTokenizer
+from src.tokenizer import (
+    MolTokenizer,
+    ProteinTokenizer,
+    SelfiesTokenizer,
+    SmilesTokenizer,
+    share_vocab,
+)
 from src.utils import Cfg, Log
 
 if __name__ == "__main__":
@@ -23,7 +29,7 @@ if __name__ == "__main__":
     logger = Log("train", osp.join(cfg.LOG_DIR, f"{cfg.task_name}.log"))
     logger.info(f"Config:\n{repr(cfg)}")
 
-    mol_tokenizer: Optional[StrTokenizer] = None
+    mol_tokenizer: Optional[MolTokenizer] = None
     if cfg.data_format == "SMILES":
         mol_tokenizer = SmilesTokenizer()
     elif cfg.data_format == "SELFIES":
@@ -33,26 +39,29 @@ if __name__ == "__main__":
             f"Config 'data_format' should be 'SMILES' or 'SELFIES', " f"but got '{cfg.tokenizer}'."
         )
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
+    prot_tokenizer = ProteinTokenizer()
+    prot_tokenizer, mol_tokenizer = share_vocab(prot_tokenizer, mol_tokenizer)
     device = torch.device(cfg.device)
 
-    dataset = MolPairDataset(
+    dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.test_data_path),
-        ("mol_a", "mol_b"),
-        tokenizer=mol_tokenizer,
-        max_len=cfg.max_len,
+        ("mol_a", "mol_b", "sequence"),
+        mol_tokenizer=mol_tokenizer,
+        prot_tokenizer=prot_tokenizer,
+        mol_max_len=None,
+        prot_max_len=None,
         left_pad=cfg.left_pad,
-        pad_batch=True
+        pad_batch=True,
     )
 
     print(f"Tokenizer vocab size: {mol_tokenizer.vocab_size}.")
     cfg.set("vocab_size", mol_tokenizer.vocab_size)
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
-    pad_fn = dataset.pad_batch_fn if dataset.pad_batch else None
     dataloader = DataLoader(
-        dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=20, collate_fn=pad_fn
+        dataset, batch_size=cfg.batch_size, shuffle=False, num_workers=20, collate_fn=dataset.collate_fn
     )
 
-    launcher = ModelLauncher("Transformer", cfg, logger, "inference", device)
+    launcher = ModelLauncher("Optformer", cfg, logger, "inference", device)
     model = launcher.get_model()
 
     inferencer = Inferencer(

@@ -1,0 +1,47 @@
+# project
+task_name: "infer_optformer_selfies"
+device: "cuda"
+word_table_path: "all/selfies_word_table.yaml"
+data_format: "SELFIES"
+# test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_selfies.csv"
+test_data_path: "finetune/runtime/datasets_seed_0/finetune_train_selfies_head100.csv"
+ckpt_path: "0926pretrain_optformer_selfies/model_epoch5_step0.pt"
+# save_path: "0926pretrain_optformer_selfies_top1.csv"
+save_path: "0926pretrain_optformer_selfies_top10_train_head100.csv"
+
+# infer
+n_best: 10
+beam_size: 25
+# default infer config
+batch_size: 8
+infer_max_len: 250
+infer_min_len: 1
+infer_left_pad: False
+stop_early: False
+normalize_scores: True
+len_penalty: 1
+unk_penalty: 0
+sampling: False
+sampling_topk: -1
+sampling_temperature: 1
+
+# model
+mol_max_len: 250
+prot_max_len: 1500
+left_pad: False
+d_model: 512
+n_head: 4
+d_enc_ffn: 1024
+d_dec_ffn: 1024
+d_fuse_ffn: 1024
+enc_n_layer: 2
+dec_n_layer: 4
+enc_dropout: 0.2
+dec_dropout: 0.2
+enc_embed_dropout: 0.15
+dec_embed_dropout: 0.15
+enc_relu_dropout: 0.1
+dec_relu_dropout: 0.1
+enc_attn_dropout: 0.15
+dec_attn_dropout: 0.15
+seed: 42

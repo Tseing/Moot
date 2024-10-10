@@ -12,6 +12,7 @@ from typing_extensions import TypeAlias
 Tokenizer: TypeAlias = Union[
     "StrTokenizer", "SmilesTokenizer", "SelfiesTokenizer", "ProteinTokenizer"
 ]
+MolTokenizer: TypeAlias = Union["SmilesTokenizer", "SelfiesTokenizer"]
 
 
 class BaseTokenizer(ABC):

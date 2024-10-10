@@ -8,7 +8,7 @@ from src.tokenizer import ProteinTokenizer, SmilesTokenizer, share_vocab
 if __name__ == "__main__":
     smiles = "CC1(N)Cc2ccccc21"
     smiles_tokenizer = SmilesTokenizer()
-    smiles_tokenizer.load_word_table("../data/smiles_word_table.yaml")
+    smiles_tokenizer.load_word_table("../data/all/smiles_word_table.yaml")
     tokenized_smiles = smiles_tokenizer.tokenize(smiles)
     print(tokenized_smiles)
     print(smiles_tokenizer.convert_ids2tokens(tokenized_smiles))
