@@ -1,4 +1,3 @@
-import os
 import os.path as osp
 import pickle
 import sys
@@ -19,9 +18,9 @@ def fetch_item_by_chembl_id(df_path: str, save_path: str) -> None:
     smiles_dict = LookupDict("../../data/all/smiles_lookup.pkl")
     selfies_dict = LookupDict("../../data/all/selfies_lookup.pkl")
     target_dict = LookupDict(
-        "../../data/finetune/all_activities.csv", ("assay_chembl_id", "target_chembl_id")
+        "../../data/all/all_activities.csv", ("assay_chembl_id", "target_chembl_id")
     )
-    prot_dict = LookupDict("../../data/finetune/all_prot_seq_less1495.csv")
+    prot_dict = LookupDict("../../data/all/all_prot_seq_less1495.csv")
 
     print(smiles_dict["CHEMBL113419"])
     print(selfies_dict["CHEMBL113419"])
@@ -59,7 +58,50 @@ def fetch_item_by_chembl_id(df_path: str, save_path: str) -> None:
         f"There are '{pre_size - df.shape[0]}' sequence cannot be found by targets ChEMBL ID."
     )
 
-    df[["mol_a", "mol_b", "target_chembl_id"]].to_csv(save_path, index=False)
+    save_df = df[
+        [
+            "mol_a",
+            "mol_b",
+            "mol_a_smiles",
+            "mol_b_smiles",
+            "mol_a_selfies",
+            "mol_b_selfies",
+            "target_chembl_id",
+            "sequence",
+        ]
+    ]
+    save_df.columns = [
+        "mol_a",
+        "mol_b",
+        "mol_a_smiles",
+        "mol_b_smiles",
+        "mol_a_selfies",
+        "mol_b_selfies",
+        "target",
+        "sequence",
+    ]
+    save_df.to_csv(save_path, index=False)
+
+
+def insert_mmp_info(df_path: str) -> None:
+    mmp_path = f"{osp.splitext(df_path)[0]}_mmp.csv"
+    df = pd.read_csv(df_path)
+    mmp_df = pd.read_csv(mmp_path)
+    assert (
+        df.shape[0] == mmp_df.shape[0]
+    ), f"Unmatched shapes between {df.shape} and {mmp_df.shape}."
+
+    df = pd.concat([df, mmp_df], axis=1)
+    df = df.dropna(how="any")
+    df.to_csv(f"{osp.splitext(df_path)[0]}_dataset.csv", index=False)
+
+
+def generate_finetune_dataset(df_path: str, save_path: str) -> None:
+    df = pd.read_csv(df_path)
+    drop_idx = (df["frag_a_heavy"] > df["core_heavy"]) & (df["frag_b_heavy"] > df["core_heavy"])
+    df = df[~drop_idx]
+
+    df.to_csv(save_path, index=False)
 
 
 class DatasetSplit:
@@ -171,62 +213,28 @@ def split_dataset(total_csv_path: str, save_dir: str, seed: int = 0):
     dataset_split.dump(save_dir)
 
 
-def fetch_smiles(
-    df_path: str, save_path: str, smiles_dict: LookupDict, prot_dict: LookupDict
-) -> None:
-    tqdm.pandas()
-    df = pd.read_csv(df_path)
-    df["mol_a"] = df["mol_a"].progress_apply(smiles_dict.lookup)
-    df["mol_b"] = df["mol_b"].progress_apply(smiles_dict.lookup)
-    df["target_chembl_id"] = df["target_chembl_id"].progress_apply(prot_dict.lookup)
-    df.columns = ["mol_a", "mol_b", "sequence"]
-
-    df.to_csv(save_path, index=False)
-
-
-def fetch_selfies(
-    df_path: str, save_path: str, selfies_dict: LookupDict, prot_dict: LookupDict
-) -> None:
-    tqdm.pandas()
-    df = pd.read_csv(df_path)
-    df["mol_a"] = df["mol_a"].progress_apply(selfies_dict.lookup)
-    df["mol_b"] = df["mol_b"].progress_apply(selfies_dict.lookup)
-    df["target_chembl_id"] = df["target_chembl_id"].progress_apply(prot_dict.lookup)
-    df.columns = ["mol_a", "mol_b", "sequence"]
-
-    df.to_csv(save_path, index=False)
-
-
-def fetch_smiles_selfies_pipeline(dataset_dir: str, save_dir: str) -> None:
-    smiles_dict = LookupDict("../../data/all/smiles_lookup.pkl")
-    selfies_dict = LookupDict("../../data/all/selfies_lookup.pkl")
-    prot_dict = LookupDict("../../data/dep_finetune/all_prot_seq_less1495.csv")
-    file_names = list(filter(lambda s: s.endswith(".csv"), os.listdir(dataset_dir)))
-    file_paths = [osp.join(dataset_dir, file_name) for file_name in file_names]
-    smiles_save_paths = [
-        osp.join(save_dir, f"{osp.splitext(file_name)[0]}_smiles.csv") for file_name in file_names
-    ]
-    selfies_save_paths = [
-        osp.join(save_dir, f"{osp.splitext(file_name)[0]}_selfies.csv") for file_name in file_names
-    ]
-
-    for i, file in enumerate(file_paths):
-        fetch_smiles(file, smiles_save_paths[i], smiles_dict, prot_dict)
-        print(f"'{smiles_save_paths[i]}' is saved.")
-        fetch_selfies(file, selfies_save_paths[i], selfies_dict, prot_dict)
-        print(f"'{selfies_save_paths[i]}' is saved.")
-
-
 if __name__ == "__main__":
-    # fetch_item_by_chembl_id(
-    #     "../../data/finetune/permed_mmp.csv", "../../data/pretrain/pretrain.csv"
+    # Generate pretrain dataset from original data
+    # fetch_item_by_chembl_id("../../data/all/all_permed_mmp.csv", "../../data/pretrain/pretrain.csv")
+
+    # Merge pretrain csv and mmp csv
+    # insert_mmp_info("../../data/pretrain/pretrain.csv")
+
+    # generate finetune dataset
+    # generate_finetune_dataset(
+    #     "../../data/pretrain/pretrain_dataset.csv", "../../data/finetune/finetune_dataset.csv"
     # )
+
+    # split pretrain datasets
+    # split_dataset(
+    #     "../../data/pretrain/pretrain_dataset.csv",
+    #     "../../data/pretrain/runtime/datasets_seed_0",
+    #     seed=0,
+    # )
+
+    # split finetune datasets
     split_dataset(
-        "../../data/pretrain/pretrain_nonan.csv",
-        "../../data/pretrain/runtime/chembl_id_seed_0",
+        "../../data/finetune/finetune_dataset.csv",
+        "../../data/finetune/runtime/datasets_seed_0",
         seed=0,
-    )
-    fetch_smiles_selfies_pipeline(
-        "../../data/pretrain/runtime/chembl_id_seed_0",
-        "../../data/pretrain/runtime/datasets_seed_0",
     )
