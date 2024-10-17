@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Literal, Optional, Tuple, TypeVar
 
 import pandas as pd
-import selfies as sf
 from rdkit import Chem, RDConfig
 from rdkit.Chem import DataStructs, Descriptors, MACCSkeys, PandasTools, Scaffolds
 from terminaltables import AsciiTable
 from tqdm import tqdm
 from typing_extensions import TypeAlias
 
+from . import selfies as sf
 from .mmpdblib import smarts_aliases
 from .mmpdblib.fragment_algorithm import fragment_mol
 from .mmpdblib.fragment_records import parse_record
@@ -154,6 +154,9 @@ def smiles2selfies(smiles: str) -> Optional[str]:
     Optional[str]
         A SELFIES string or None if inputted SMILES is invalid.
     """
+
+    # Replace `*` as `[*]` supported in SELFIES
+    smiles = smiles.replace("*", "[*]")
     try:
         selfies = sf.encoder(smiles)
     except:
@@ -637,12 +640,24 @@ class ResultMetrics(Metrics):
         groups = self.df.groupby("src")
         recovery_dict = {group[0]: frozenset(group[1]["tgt"].to_list()) for group in groups}
         recovery_cnt = 0
+        core_recovery_cnt = 0
+        frequent_core_recovery_cnt = 0
         for i in range(self.result_group):
             unique_out = set(self.df["out"][i : i + self.topk].to_list())
             if unique_out & recovery_dict[self.df["src"][i]]:
                 recovery_cnt += 1
 
+            frequent_core = self.df["gen_core"][i : i + self.topk].value_counts(dropna=False).index[0]
+            if frequent_core == self.df["core"][i]:
+                frequent_core_recovery_cnt += 1
+
+            unique_core = set(self.df["gen_core"][i : i + self.topk].to_list())
+            if self.df["core"][i] in unique_core:
+                core_recovery_cnt += 1
+
         recovery = recovery_cnt / self.result_group
+        core_group_recovery = core_recovery_cnt / self.result_group
+        frequent_core_recovery = frequent_core_recovery_cnt / self.result_group
 
         core_recovery = (self.df["gen_core"] == self.df["core"]).sum() / size
         frag_a_recovery = (self.df["gen_frag_a"] == self.df["frag_a"]).sum() / size
@@ -660,6 +675,8 @@ class ResultMetrics(Metrics):
             ["Strict Recovery", f"{strict_recovery:.4f}"],
             ["Recovery", f"{recovery:.4f}"],
             ["Core Recovery", f"{core_recovery:.4f}"],
+            ["Core Group Recovery", f"{core_group_recovery:.4f}"],
+            ["Frequent Core Recovery", f"{frequent_core_recovery:.4f}"],
             ["Truncated Frag Recovery", f"{frag_a_recovery:.4f}"],
             ["Spliced Frag Recovery", f"{frag_b_recovery:.4f}"],
             ["Uniqueness", f"{uniqueness:.4f}"],

@@ -6,7 +6,6 @@ import time
 from typing import Any, Iterable, List, Sequence, Tuple, Union
 
 import numpy as np
-import selfies as sf
 import yaml
 from jaxtyping import Bool, Float, Int
 from nltk.translate.chrf_score import sentence_chrf
@@ -16,6 +15,7 @@ from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from torch import Tensor, nn
 
+from . import selfies as sf
 from .tokenizer import StrTokenizer
 from .typing import Device
 

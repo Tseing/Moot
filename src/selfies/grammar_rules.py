@@ -3,14 +3,14 @@ import itertools
 import re
 from typing import Any, List, Optional, Tuple
 
-from selfies.constants import (
+from .constants import (
     ELEMENTS,
     INDEX_ALPHABET,
     INDEX_CODE,
     ORGANIC_SUBSET
 )
-from selfies.mol_graph import Atom
-from selfies.utils.smiles_utils import smiles_to_bond
+from .mol_graph import Atom
+from .utils.smiles_utils import smiles_to_bond
 
 
 def process_atom_symbol(symbol: str) -> Optional[Tuple[Any, Atom]]:
@@ -107,7 +107,7 @@ SELFIES_ATOM_PATTERN = re.compile(
     r"^[\[]"  # opening square bracket [
     r"([=#/\\]?)"  # bond char
     r"(\d*)"  # isotope number (optional, e.g. 123, 26)
-    r"([A-Z][a-z]?)"  # element symbol
+    r"([A-Z][a-z]?|\*)"  # element symbol
     r"([@]{0,2})"  # chiral_tag (optional, only @ and @@ supported)
     r"((?:[H]\d)?)"  # H count (optional, e.g. H1, H3)
     r"((?:[+-][1-9]+)?)"  # charge (optional, e.g. +1)
