@@ -25,6 +25,7 @@ class PairDataset(Dataset):
     ) -> None:
         super().__init__()
         df = pd.read_csv(data_path, usecols=data_cols, **kwargs)
+        df = df.reindex(columns=data_cols)
         self.data = df.to_numpy()
         self.len = self.data.shape[0]
         self.dtype = dtype
@@ -61,7 +62,7 @@ class MolPairDataset(PairDataset):
     def __init__(
         self,
         data_path: str,
-        data_cols: Tuple[str, str],
+        data_cols: Tuple[str, ...],
         tokenizer: MolTokenizer,
         max_len: Optional[int],
         left_pad: bool,
@@ -114,7 +115,7 @@ class MolProtPairDataset(PairDataset):
     def __init__(
         self,
         data_path: str,
-        data_cols: Tuple[str, str, str],
+        data_cols: Tuple[str, ...],
         mol_tokenizer: MolTokenizer,
         prot_tokenizer: ProteinTokenizer,
         mol_max_len: Optional[int],
@@ -176,3 +177,68 @@ class MolProtPairDataset(PairDataset):
         padded_tgts = torch.tensor(pad_sequences(tgts, self.pad_value, self.left_pad))
 
         return (padded_mols, padded_prots), padded_tgts
+
+
+class FragPairDataset(MolPairDataset):
+    def __init__(
+        self,
+        data_path: str,
+        data_cols: Tuple[str, str, str],
+        tokenizer: MolTokenizer,
+        max_len: Optional[int],
+        left_pad: bool,
+        pad_batch: bool,
+        dtype: DTypeLike = np.int32,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            data_path, data_cols, tokenizer, max_len, left_pad, pad_batch, dtype, **kwargs
+        )
+
+    def transform(self, row: NDArray) -> Tuple[Input, Target]:
+        core, frag, tgt = row
+        src = "|".join([core, frag])
+        tokenized_src = self.tokenizer.tokenize(src).astype(self.dtype)
+        tokenized_tgt = self.tokenizer.tokenize(tgt).astype(self.dtype)
+
+        return tokenized_src, tokenized_tgt
+
+
+class FragProtPairDataset(MolProtPairDataset):
+    def __init__(
+        self,
+        data_path: str,
+        data_cols: Tuple[str, str, str, str],
+        mol_tokenizer: MolTokenizer,
+        prot_tokenizer: ProteinTokenizer,
+        mol_max_len: Optional[int],
+        prot_max_len: Optional[int],
+        left_pad: bool,
+        pad_batch: bool,
+        dtype: DTypeLike = np.int32,
+        **kwargs,
+    ):
+        super().__init__(
+            data_path,
+            data_cols,
+            mol_tokenizer,
+            prot_tokenizer,
+            mol_max_len,
+            prot_max_len,
+            left_pad,
+            pad_batch,
+            dtype,
+            **kwargs,
+        )
+
+
+    def transform(self, row: NDArray) -> Tuple[Input, Target]:
+        core, frag, tgt, prot = row
+        mol = "|".join([core, frag])
+
+        tokenized_mol = self.mol_tokenizer.tokenize(mol).astype(self.dtype)
+        prot = "".join([f"-{letter}" for letter in prot])
+        tokenized_prot = self.prot_tokenizer.tokenize(prot).astype(self.dtype)
+        tokenized_tgt = self.mol_tokenizer.tokenize(tgt).astype(self.dtype)
+
+        return (tokenized_mol, tokenized_prot), tokenized_tgt

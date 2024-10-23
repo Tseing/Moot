@@ -10,9 +10,13 @@ from tqdm import tqdm
 from typing_extensions import TypeAlias
 
 Tokenizer: TypeAlias = Union[
-    "StrTokenizer", "SmilesTokenizer", "SelfiesTokenizer", "ProteinTokenizer"
+    "StrTokenizer",
+    "SmilesTokenizer",
+    "SelfiesTokenizer",
+    "ProteinTokenizer",
+    "FragSelfiesTokenizer",
 ]
-MolTokenizer: TypeAlias = Union["SmilesTokenizer", "SelfiesTokenizer"]
+MolTokenizer: TypeAlias = Union["SmilesTokenizer", "SelfiesTokenizer", "FragSelfiesTokenizer"]
 
 
 class BaseTokenizer(ABC):
@@ -170,6 +174,29 @@ class SmilesTokenizer(StrTokenizer):
 class SelfiesTokenizer(StrTokenizer):
     def __init__(self):
         pattern = "\[.*?\]|\.|{unk}"
+        super().__init__(pattern)
+
+    def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
+        return [self.bos] + bald_tokens + [self.eos]
+
+
+class FragSmilesTokenizer(StrTokenizer):
+    def __init__(self):
+        pattern = (
+            "(\[[^\]]+]|{unk}|<|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|"
+            "\(|\)|\.|=|#|-|\+|\\\\|\/|:|~|@|\?|>|\*|\||\$|\%"
+            "[0-9]{2}|[0-9])"
+        )
+
+        super().__init__(pattern)
+
+    def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
+        return [self.bos] + bald_tokens + [self.eos]
+
+
+class FragSelfiesTokenizer(StrTokenizer):
+    def __init__(self):
+        pattern = "\[.*?\]|\.|\||{unk}"
         super().__init__(pattern)
 
     def _format_tokens(self, bald_tokens: List[str]) -> List[str]:
