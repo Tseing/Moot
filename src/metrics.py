@@ -38,6 +38,9 @@ class ModelMetrics(ABC):
 
         total = hyps_array.shape[0]
 
+        # array metric
+        token_accuracy = (hyps_array == refs_array).sum() / hyps_array.size
+
         hyps = self._post_process(hyps_array)
         refs = self._post_process(refs_array)
 
@@ -46,6 +49,8 @@ class ModelMetrics(ABC):
 
         iterator = zip(hyps, refs)
         self.results = self._metrics_pipeline(iterator, total)
+
+        self.results["Token accuracy"] = token_accuracy
 
         return self.results
 
@@ -72,15 +77,16 @@ class SmilesMetrics(ModelMetrics):
         return trim_seqs(array, self.tokenizer)
 
     @staticmethod
-    def _metrics_proc(hyp: List[str], ref: List[str]) -> Tuple[float, float, float]:
+    def _metrics_proc(hyp: List[str], ref: List[str]) -> Tuple[float, ...]:
         hyp_str = "".join(hyp)
         ref_str = "".join(ref)
 
         validity = cal_smiles_validity(hyp_str)
         similarity = cal_smiles_similarity(hyp_str, ref_str)
         chrf = cal_chrf(hyp, ref)
+        recovery = 1.0 if (hyp_str == ref_str) else 0.0
 
-        return validity, similarity, chrf
+        return validity, similarity, chrf, recovery
 
     def _metrics_pipeline(
         self, iterator: Iterable[Tuple[List[str], List[str]]], total: int
@@ -96,22 +102,25 @@ class SmilesMetrics(ModelMetrics):
             pool.join()
 
         res_value = tuple(r.get() for r in res)
-        validity, similarity, chrf = zip(*res_value)
+        validity, similarity, chrf, recovery = zip(*res_value)
 
         return {
             "Validity": sum(validity) / float(total),
             "Similarity": sum(similarity) / float(total),
             "ChRF": sum(chrf) / float(total),
+            "Recovery": sum(recovery) / float(total),
         }
+
 
 class SelfiesMetrics(SmilesMetrics):
     @staticmethod
-    def _metrics_proc(hyp: List[str], ref: List[str]) -> Tuple[float, float, float]:
+    def _metrics_proc(hyp: List[str], ref: List[str]) -> Tuple[float, ...]:
         hyp_str = "".join(hyp)
         ref_str = "".join(ref)
 
         validity = cal_selfies_validity(hyp_str)
         similarity = cal_selfies_similarity(hyp_str, ref_str)
         chrf = cal_chrf(hyp, ref)
+        recovery = 1.0 if (hyp_str == ref_str) else 0.0
 
-        return validity, similarity, chrf
+        return validity, similarity, chrf, recovery
