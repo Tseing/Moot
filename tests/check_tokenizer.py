@@ -3,7 +3,7 @@ import sys
 sys.path.append("..")
 
 
-from src.tokenizer import ProteinTokenizer, SmilesTokenizer, share_vocab
+from src.tokenizer import AtomTokenizer, ProteinTokenizer, SmilesTokenizer, share_vocab
 
 if __name__ == "__main__":
     smiles = "CC1(N)Cc2ccccc21"
@@ -31,3 +31,7 @@ if __name__ == "__main__":
     tokenized_protein = protein_tokenizer.tokenize(protein)
     print(tokenized_protein)
     print(protein_tokenizer.convert_ids2tokens(tokenized_protein))
+
+    atoms = "[Cr]{unk}[C][C][C][C][N][*][C][C][C][C][C][C][O][N][C][C][C][C][C][C][N][C][C][O][C][C][N][C][C][C][N][C][C][C][C][C][C][C][C][C][C][C]"
+    atom_tokenizer = AtomTokenizer()
+    print(atom_tokenizer.tokenize(atoms))
