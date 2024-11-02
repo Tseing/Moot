@@ -94,7 +94,7 @@ if __name__ == "__main__":
     cfg.set("vocab_size", mol_tokenizer.vocab_size)
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
 
-    launcher = ModelLauncher("Optformer", cfg, logger, "train", device)
+    launcher = ModelLauncher("Optformer", cfg, logger, "finetune", device)
     model = launcher.get_model()
 
     optimizer = Adam(params=model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)

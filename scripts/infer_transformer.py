@@ -37,9 +37,9 @@ if __name__ == "__main__":
 
     dataset = MolPairDataset(
         osp.join(cfg.DATA_DIR, cfg.test_data_path),
-        ("mol_a", "mol_b"),
+        cfg.use_cols,
         tokenizer=mol_tokenizer,
-        max_len=cfg.max_len,
+        max_len=None,
         left_pad=cfg.left_pad,
         pad_batch=True
     )
