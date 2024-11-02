@@ -1,0 +1,40 @@
+# project
+task_name: "train_frag_optformer_selfies"
+device: "cuda"
+train_data_path: "frag/runtime/frag_train.csv"
+val_data_path: "frag/runtime/frag_val.csv"
+word_table_path: "frag/selfies_word_table.yaml"
+data_format: "SELFIES"
+data_cols: ["core_selfies", "frag_a_selfies", "frag_b_selfies", "sequence"]
+
+# train
+learning_rate: 1.0e-4
+min_learning_rate: 1.0e-6
+# warming_steps * bsz / all_size = proportion
+warming_step: 65679   # 50% epoch
+weight_decay: 1.0e-5
+batch_size: 32
+epoch_num: 20
+log_interval: 50
+seed: 42
+save_interval: 1
+
+# model
+mol_max_len: 250
+prot_max_len: 1500
+left_pad: False
+d_model: 512
+n_head: 4
+d_enc_ffn: 1024
+d_dec_ffn: 1024
+d_fuse_ffn: 1024
+enc_n_layer: 2
+dec_n_layer: 4
+enc_dropout: 0.2
+dec_dropout: 0.2
+enc_embed_dropout: 0.15
+dec_embed_dropout: 0.15
+enc_relu_dropout: 0.1
+dec_relu_dropout: 0.1
+enc_attn_dropout: 0.15
+dec_attn_dropout: 0.15
