@@ -124,3 +124,41 @@ class SelfiesMetrics(SmilesMetrics):
         recovery = 1.0 if (hyp_str == ref_str) else 0.0
 
         return validity, similarity, chrf, recovery
+
+
+class AtomMetrics(ModelMetrics):
+    def __init__(self, tokenizer: StrTokenizer, worker: int = 10, show_bar: bool = True) -> None:
+        self.tokenizer = tokenizer
+        self.worker = worker
+        super().__init__(show_bar)
+
+    def _post_process(self, array: ndarray[Any, np.dtype]) -> List[List[str]]:
+        return trim_seqs(array, self.tokenizer)
+
+    @staticmethod
+    def _metrics_proc(hyp: List[str], ref: List[str]) -> float:
+        hyp_str = "".join(hyp)
+        ref_str = "".join(ref)
+
+        recovery = 1.0 if (hyp_str == ref_str) else 0.0
+        return recovery
+
+    def _metrics_pipeline(
+        self, iterator: Iterable[Tuple[List[str], List[str]]], total: int
+    ) -> Dict[str, float]:
+        with Pool(processes=self.worker) as pool:
+            res = [
+                pool.apply_async(
+                    self._metrics_proc, args=(hyp, ref), callback=lambda *args: self._pbar.update()
+                )
+                for hyp, ref in iterator
+            ]
+            pool.close()
+            pool.join()
+
+        res_value = tuple(r.get() for r in res)
+        recovery = res_value
+
+        return {
+            "Recovery": sum(recovery) / float(total),
+        }
