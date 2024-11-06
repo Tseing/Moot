@@ -75,12 +75,16 @@ class MolPairDataset(PairDataset):
         self.pad_batch = pad_batch
 
         if pad_batch:
-            assert max_len is None, f"`max_len` is '{max_len}' when `pad_batch` is '{pad_batch}'"
+            assert max_len is None, (
+                f"`max_len` should be 'None' when `pad_batch` is '{pad_batch}', "
+                f"but `max_len` is '{max_len}'."
+            )
 
         else:
-            assert (
-                max_len is not None
-            ), f"`max_len` is '{max_len}' when `pad_batch` is '{pad_batch}'"
+            assert max_len is not None, (
+                f"`max_len` should not be 'None' when `pad_batch` is '{pad_batch}', "
+                f"but `max_len` is '{max_len}'."
+            )
             self.max_len: TypeGuard[int] = max_len
 
         self.left_pad = left_pad
@@ -132,14 +136,14 @@ class MolProtPairDataset(PairDataset):
 
         if pad_batch:
             assert mol_max_len is None and prot_max_len is None, (
-                f"`mol_max_len` is '{mol_max_len}', `prot_max_len` is '{prot_max_len}' "
-                f"when `pad_batch` is '{pad_batch}'"
+                f"`max_len` should be 'None' when `pad_batch` is '{pad_batch}', but "
+                f"`mol_max_len` is '{mol_max_len}', `prot_max_len is {prot_max_len}`."
             )
 
         else:
-            assert mol_max_len is not None or prot_max_len is not None, (
-                f"`mol_max_len` is '{mol_max_len}', `prot_max_len` is '{prot_max_len}' "
-                f"when `pad_batch` is '{pad_batch}'"
+            assert mol_max_len is not None and prot_max_len is not None, (
+                f"`max_len` should not be 'None' when `pad_batch` is '{pad_batch}', but "
+                f"`mol_max_len` is '{mol_max_len}', `prot_max_len is {prot_max_len}`."
             )
             self.mol_max_len = mol_max_len
             self.prot_max_len = prot_max_len
@@ -178,6 +182,7 @@ class MolProtPairDataset(PairDataset):
 
         return (padded_mols, padded_prots), padded_tgts
 
+
 class MolAtomPairDataset(PairDataset):
     def __init__(
         self,
@@ -199,14 +204,14 @@ class MolAtomPairDataset(PairDataset):
 
         if pad_batch:
             assert mol_max_len is None and atom_max_len is None, (
-                f"`mol_max_len` is '{mol_max_len}', `atom_max_len` is '{atom_max_len}' "
-                f"when `pad_batch` is '{pad_batch}'"
+                f"`max_len` should be 'None' when `pad_batch` is '{pad_batch}', but "
+                f"`mol_max_len` is '{mol_max_len}', `atom_max_len is {atom_max_len}`."
             )
 
         else:
-            assert mol_max_len is not None or atom_max_len is not None, (
-                f"`mol_max_len` is '{mol_max_len}', `atom_max_len` is '{atom_max_len}' "
-                f"when `pad_batch` is '{pad_batch}'"
+            assert mol_max_len is not None and atom_max_len is not None, (
+                f"`max_len` should not be 'None' when `pad_batch` is '{pad_batch}', but "
+                f"`mol_max_len` is '{mol_max_len}', `atom_max_len is {atom_max_len}`."
             )
             self.mol_max_len = mol_max_len
             self.atom_max_len = atom_max_len
@@ -238,6 +243,83 @@ class MolAtomPairDataset(PairDataset):
         padded_tgts = torch.tensor(pad_sequences(tgts, self.pad_value, self.left_pad))
 
         return padded_srcs, padded_tgts
+
+
+class MolAtomProtPairDataset(PairDataset):
+    def __init__(
+        self,
+        data_path: str,
+        data_cols: Tuple[str, ...],
+        mol_tokenizer: MolTokenizer,
+        atom_tokenizer: AtomTokenizer,
+        prot_tokenizer: ProteinTokenizer,
+        mol_max_len: Optional[int],
+        atom_max_len: Optional[int],
+        prot_max_len: Optional[int],
+        left_pad: bool,
+        pad_batch: bool,
+        dtype: DTypeLike = np.int32,
+        **kwargs,
+    ) -> None:
+        super().__init__(data_path, data_cols, False, dtype, **kwargs)
+        self.mol_tokenizer = mol_tokenizer
+        self.atom_tokenizer = atom_tokenizer
+        self.prot_tokenizer = prot_tokenizer
+        self.pad_batch = pad_batch
+
+        if pad_batch:
+            assert mol_max_len is None and atom_max_len is None and prot_max_len is None, (
+                f"`max_len` should be 'None' when `pad_batch` is '{pad_batch}', but "
+                f"`mol_max_len` is '{mol_max_len}', `atom_max_len is {atom_max_len}`, "
+                f"`prot_max_len` is '{prot_max_len}'."
+            )
+
+        else:
+            assert (
+                mol_max_len is not None and atom_max_len is not None and prot_max_len is not None
+            ), (
+                f"`max_len` should not be 'None' when `pad_batch` is '{pad_batch}', but "
+                f"`mol_max_len` is '{mol_max_len}', `atom_max_len is {atom_max_len}`, "
+                f"`prot_max_len` is '{prot_max_len}'."
+            )
+            self.mol_max_len = mol_max_len
+            self.atom_max_len = atom_max_len
+            self.prot_max_len = prot_max_len
+
+        self.left_pad = left_pad
+        self.pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
+
+    def transform(self, row: NDArray) -> Tuple[Input, Target]:
+        mol, atom, prot = row
+
+        tokenized_mol = self.mol_tokenizer.tokenize(mol).astype(self.dtype)
+        prot = "".join([f"-{letter}" for letter in prot])
+        tokenized_prot = self.prot_tokenizer.tokenize(prot).astype(self.dtype)
+        tokenized_atom = self.atom_tokenizer.tokenize(atom).astype(self.dtype)
+
+        return (tokenized_mol, tokenized_prot), tokenized_atom
+
+    def pad_transform(self, data: Tuple[Input, Target]) -> Tuple[Input, Target]:
+        (tokenized_mol, tokenized_prot), tokenized_tgt = data
+        padded_mol = pad_sequence(tokenized_mol, self.mol_max_len, self.pad_value, self.left_pad)
+        padded_prot = pad_sequence(tokenized_prot, self.prot_max_len, self.pad_value, self.left_pad)
+        padded_tgt = pad_sequence(tokenized_tgt, self.atom_max_len, self.pad_value, self.left_pad)
+
+        return (padded_mol, padded_prot), padded_tgt
+
+    def pad_batch_fn(
+        self, data: List[Tuple[Input, Target]]
+    ) -> Tuple[Tuple[Int[Tensor, "bsz ..."], Int[Tensor, "bsz ..."]], Int[Tensor, "bsz ..."]]:
+
+        srcs, tgts = tuple(zip(*data))
+        mols, prots = tuple(zip(*srcs))
+
+        padded_mols = torch.tensor(pad_sequences(mols, self.pad_value, self.left_pad))
+        padded_prots = torch.tensor(pad_sequences(prots, self.pad_value, self.left_pad))
+        padded_tgts = torch.tensor(pad_sequences(tgts, self.pad_value, self.left_pad))
+
+        return (padded_mols, padded_prots), padded_tgts
+
 
 class FragPairDataset(MolPairDataset):
     def __init__(
