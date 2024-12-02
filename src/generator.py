@@ -661,9 +661,9 @@ class SequenceGenerator:
         # print(tokens)
         # print(logits.argmax(dim=-1))
         probs = logits
-        # if log_probs:
-        #     probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
-        # else:
-        #     probs = F.softmax(logits, dim=-1, dtype=torch.float32)
+        if log_probs:
+            probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
+        else:
+            probs = F.softmax(logits, dim=-1, dtype=torch.float32)
 
         return probs, attn
