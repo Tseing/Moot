@@ -35,7 +35,7 @@ line-length = 100
 
 [tool.isort]
 profile = "black"
-src_paths = ["src", "scripts/*"]
+src_paths = ["src", "src/utils/*", "scripts/*"]
 
 [tool.mypy]
 ignore_missing_imports = true

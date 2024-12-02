@@ -15,9 +15,9 @@ from rdkit import Chem, DataStructs
 from rdkit.Chem import AllChem
 from torch import Tensor, nn
 
-from . import selfies as sf
-from .tokenizer import StrTokenizer
-from .typing import Device
+from .. import selfies as sf
+from ..tokenizer import StrTokenizer
+from ..typing import Device
 
 
 def count_parameters(model: nn.Module) -> int:
