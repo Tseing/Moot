@@ -11,10 +11,10 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
 
-from src.dataset import MolAtomPairDataset
+from src.dataset import MolAtomProtPairDataset
 from src.launcher import ModelLauncher
 from src.metrics import AtomMetrics
-from src.tokenizer import AtomTokenizer, SmilesTokenizer, share_vocab
+from src.tokenizer import AtomTokenizer, ProteinTokenizer, SmilesTokenizer, share_vocab
 from src.trainer import ModelSaver, ModelTrainer
 from src.utils import Cfg, Log
 
@@ -36,27 +36,34 @@ if __name__ == "__main__":
     device = torch.device(cfg.device)
 
     atom_tokenizer = AtomTokenizer()
+    prot_tokenizer = ProteinTokenizer()
     mol_tokenizer = SmilesTokenizer()
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
-    atom_tokenizer, mol_tokenizer = share_vocab(atom_tokenizer, mol_tokenizer)
+    atom_tokenizer, prot_tokenizer, mol_tokenizer = share_vocab(
+        atom_tokenizer, prot_tokenizer, mol_tokenizer
+    )
 
-    train_dataset = MolAtomPairDataset(
+    train_dataset = MolAtomProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
         cfg.data_cols,
         mol_tokenizer=mol_tokenizer,
         atom_tokenizer=atom_tokenizer,
-        mol_max_len=cfg.max_len,
-        atom_max_len=cfg.max_len,
+        prot_tokenizer=prot_tokenizer,
+        mol_max_len=cfg.mol_max_len,
+        atom_max_len=cfg.mol_max_len,
+        prot_max_len=cfg.prot_max_len,
         left_pad=cfg.left_pad,
         pad_batch=False,
     )
-    val_dataset = MolAtomPairDataset(
+    val_dataset = MolAtomProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
         cfg.data_cols,
         mol_tokenizer=mol_tokenizer,
         atom_tokenizer=atom_tokenizer,
-        mol_max_len=cfg.max_len,
-        atom_max_len=cfg.max_len,
+        prot_tokenizer=prot_tokenizer,
+        mol_max_len=cfg.mol_max_len,
+        atom_max_len=cfg.mol_max_len,
+        prot_max_len=cfg.prot_max_len,
         left_pad=cfg.left_pad,
         pad_batch=False,
     )
@@ -79,7 +86,7 @@ if __name__ == "__main__":
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
     cfg.set("bos_value", mol_tokenizer.vocab2index[mol_tokenizer.bos])
 
-    launcher = ModelLauncher("Transformer", cfg, logger, "train", device)
+    launcher = ModelLauncher("Optformer", cfg, logger, "train", device)
     model = launcher.get_model()
 
     optimizer = Adam(params=model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
