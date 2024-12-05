@@ -10,7 +10,6 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data import DataLoader
 
 from .metrics import ModelMetrics
-from .tokenizer import StrTokenizer
 from .typing import Device
 from .utils import Log
 
@@ -56,7 +55,7 @@ class ModelTrainer:
         warming_step: int,
         metrics: ModelMetrics,
         saver: ModelSaver,
-        tokenizer: StrTokenizer,
+        bos_value: int,
         device: Device,
         logger: Optional[Log] = None,
         log_interval: int = 10,
@@ -68,7 +67,7 @@ class ModelTrainer:
         self.warming_step = warming_step
         self.metrics = metrics
         self.saver = saver
-        self.tokenizer = tokenizer
+        self.bos_value = bos_value
         self.device = device
         self.logger = logger
         self.log_interval = log_interval
@@ -151,7 +150,7 @@ class ModelTrainer:
                     output_seq,
                     ([0, 0], [1, 0]),
                     "constant",
-                    constant_values=self.tokenizer.vocab2index[self.tokenizer.bos],
+                    constant_values=self.bos_value,
                 )
 
                 tgt_seq = tgt.cpu().numpy()

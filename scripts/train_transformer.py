@@ -80,6 +80,7 @@ if __name__ == "__main__":
 
     cfg.set("vocab_size", mol_tokenizer.vocab_size)
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
+    cfg.set("bos_value", mol_tokenizer.vocab2index[mol_tokenizer.bos])
 
     launcher = ModelLauncher("Transformer", cfg, logger, "train", device)
     model = launcher.get_model()
@@ -109,7 +110,7 @@ if __name__ == "__main__":
         criterion=criterion,
         metrics=metrics,
         saver=saver,
-        tokenizer=mol_tokenizer,
+        bos_value=cfg.bos_value,
         device=device,
         logger=logger,
         log_interval=cfg.log_interval,
