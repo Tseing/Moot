@@ -1,3 +1,5 @@
+import os.path as osp
+import pickle
 from collections import namedtuple
 from typing import Optional, Sequence, Tuple
 
@@ -103,7 +105,9 @@ class Inferencer:
                 "P\t" + " ".join(f"{x:.4f}" for x in hypo["positional_scores"].tolist())
             )
             result.alignments.append(
-                "A\t" + " ".join(str(item(x)) for x in alignment) if alignment and self.print_alignment else None
+                "A\t" + " ".join(str(item(x)) for x in alignment)
+                if alignment and self.print_alignment
+                else None
             )
 
         return result
@@ -140,7 +144,9 @@ class Inferencer:
         # TODO: Optimize memory with reading / writing chunk
         indices = []
         results = []
-        for batch_indices, batch in tqdm(enumerate(self.data_dl), desc="Inference", total=len(self.data_dl)):
+        for batch_indices, batch in tqdm(
+            enumerate(self.data_dl), desc="Inference", total=len(self.data_dl)
+        ):
             _, tgt = batch
             indices.extend([batch_indices] * tgt.shape[0])
             results += self.process_batch(batch)
@@ -172,8 +178,19 @@ class Inferencer:
             result = results[i]
             inp_array = result.src_str.cpu().numpy()
             inp = " ".join(self.tokenizer.vec_ids2tokens(self.tokenizer.trim(inp_array)))
-            inps.extend([inp] * self.nbest)
-            outps.extend([hypo[1] for hypo in result.hypos])
+            hypos = result.hypos
 
-        pd.DataFrame({"input": inps, "output": outps}).to_csv(save_path, index=False)
-        print(f"Inference results are saved in '{save_path}'.")
+            inps.extend([inp for _ in range(self.nbest)])
+            outps.extend([hypo[1] for hypo in hypos[:min(self.nbest, len(hypos))]])
+
+            # match items number of inps and outps
+            if len(hypos) < self.nbest:
+                outps.extend(["" for _ in range(self.nbest - len(hypos))])
+
+        try:
+            pd.DataFrame({"input": inps, "output": outps}).to_csv(save_path, index=False)
+            print(f"Inference results are saved in '{save_path}'.")
+        except:
+            pickle.dump((inps, outps), open(f"{osp.splitext(save_path)[0]}.pkl", "wb"))
+            print("Failed to save csv reuslt, pickle file is saved.")
+        
