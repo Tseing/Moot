@@ -3,17 +3,16 @@ task_name: "infer_optformer_selfies"
 device: "cuda"
 word_table_path: "all/selfies_word_table.yaml"
 data_format: "SELFIES"
-# test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_selfies.csv"
-test_data_path: "finetune/runtime/datasets_seed_0/finetune_train_selfies_head100.csv"
-ckpt_path: "0926pretrain_optformer_selfies/model_epoch5_step0.pt"
-# save_path: "0926pretrain_optformer_selfies_top1.csv"
-save_path: "0926pretrain_optformer_selfies_top10_train_head100.csv"
+test_data_path: "finetune/runtime/datasets_seed_0/finetune_test.csv"
+ckpt_path: "train_optformer_selfies/model_epoch5_step0.pt"
+save_path: "train_optformer_selfies_top1.csv"
+data_cols: ["mol_a_selfies", "mol_b_selfies", "sequence"]
 
 # infer
-n_best: 10
-beam_size: 25
+n_best: 1
+beam_size: 4
 # default infer config
-batch_size: 8
+batch_size: 128
 infer_max_len: 250
 infer_min_len: 1
 infer_left_pad: False

@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.test_data_path),
-        ("mol_a", "mol_b", "sequence"),
+        cfg.data_cols,
         mol_tokenizer=mol_tokenizer,
         prot_tokenizer=prot_tokenizer,
         mol_max_len=None,

@@ -1,15 +1,16 @@
 # project
-task_name: "infer_transformer_selfies"
+task_name: "infer_transformer_smiles"
 device: "cuda"
-word_table_path: "all/selfies_word_table.yaml"
-data_format: "SELFIES"
-test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_selfies.csv"
-ckpt_path: "0819finetune_transformer_selfies/model_epoch5_step0.pt"
-save_path: "0819finetune_transformer_selfies_top1.csv"
+word_table_path: "all/smiles_word_table.yaml"
+data_format: "SMILES"
+test_data_path: "finetune/runtime/datasets_seed_0/finetune_test.csv"
+ckpt_path: "train_transformer_smiles/model_epoch5_step0.pt"
+save_path: "train_transformer_smiles_top1.csv"
+data_cols: ["mol_a_smiles", "mol_b_smiles"]
 
 # infer
 n_best: 1
-beam_size: 5
+beam_size: 4
 # default infer config
 batch_size: 64
 infer_max_len: 100

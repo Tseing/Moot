@@ -1,18 +1,19 @@
 # project
-task_name: "infer_transformer_smiles"
+task_name: "infer_optformer_smiles"
 device: "cuda"
 word_table_path: "all/smiles_word_table.yaml"
 data_format: "SMILES"
-test_data_path: "finetune/runtime/datasets_seed_0/finetune_test_smiles.csv"
-ckpt_path: "0815finetune_transformer_smiles/model_epoch5_step0.pt"
-save_path: "0815finetune_transformer_smiles_top1.csv"
+test_data_path: "finetune/runtime/datasets_seed_0/finetune_test.csv"
+ckpt_path: "train_optformer_smiles/model_epoch10_step0.pt"
+save_path: "train_optformer_smiles_top1.csv"
+data_cols: ["mol_a_smiles", "mol_b_smiles", "sequence"]
 
 # infer
 n_best: 1
-beam_size: 5
+beam_size: 4
 # default infer config
-batch_size: 64
-infer_max_len: 100
+batch_size: 128
+infer_max_len: 250
 infer_min_len: 1
 infer_left_pad: False
 stop_early: False
@@ -24,13 +25,15 @@ sampling_topk: -1
 sampling_temperature: 1
 
 # model
-max_len: 250
+mol_max_len: 250
+prot_max_len: 1500
 left_pad: False
 d_model: 512
-n_head: 8
+n_head: 4
 d_enc_ffn: 1024
 d_dec_ffn: 1024
-enc_n_layer: 3
+d_fuse_ffn: 1024
+enc_n_layer: 2
 dec_n_layer: 4
 enc_dropout: 0.2
 dec_dropout: 0.2
