@@ -1,0 +1,31 @@
+# project
+task_name: "infer_core_transformer"
+device: "cpu"
+word_table_path: "all/smiles_word_table.yaml"
+test_data_path: "atom/runtime/atom_dataset_test.csv"
+ckpt_path: "train_core_transformer/model_epoch10_step0.pt"
+save_path: "infer_core_transformer.csv"
+data_cols: ["mol_a_smiles"]
+
+# infer
+batch_size: 1024
+
+# model
+model: Transformer
+max_len: 250
+left_pad: False
+d_model: 512
+n_head: 8
+d_enc_ffn: 1024
+d_dec_ffn: 1024
+enc_n_layer: 3
+dec_n_layer: 4
+enc_dropout: 0.2
+dec_dropout: 0.2
+enc_embed_dropout: 0.15
+dec_embed_dropout: 0.15
+enc_relu_dropout: 0.1
+dec_relu_dropout: 0.1
+enc_attn_dropout: 0.15
+dec_attn_dropout: 0.15
+seed: 42
