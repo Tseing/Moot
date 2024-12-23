@@ -3,29 +3,21 @@ import os
 import os.path as osp
 import pickle
 import random
-import sys
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Literal, Optional, Tuple, TypeVar
+from typing import Callable, Dict, List, Optional, Tuple, TypeVar
 
 import pandas as pd
-from rdkit import Chem, RDConfig
-from rdkit.Chem import DataStructs, Descriptors, MACCSkeys, PandasTools, Scaffolds
-from terminaltables import AsciiTable
+from rdkit import Chem
+from rdkit.Chem import Descriptors
 from tqdm import tqdm
-from typing_extensions import TypeAlias
 
 from . import selfies as sf
 from .mmpdblib import smarts_aliases
 from .mmpdblib.fragment_algorithm import fragment_mol
 from .mmpdblib.fragment_records import parse_record
 from .mmpdblib.fragment_types import Fragmentation, FragmentOptions
+from .typing import Mol
 
-sys.path.append(os.path.join(RDConfig.RDContribDir, "SA_Score"))
-
-import sascorer
-
-Mol: TypeAlias = Chem.rdchem.Mol
 T = TypeVar("T")
 U = TypeVar("U")
 
@@ -422,7 +414,13 @@ class MMPChecker:
         pool.close()
         pool.join()
 
-        records = [result.get() for result in results]
+        records = []
+        for result in results:
+            try:
+                records.append(result.get())
+            except:
+                records.append(None)
+
         new_cache = dict(zip(record_keys, records))
         self.cache.update(new_cache)
 
@@ -436,253 +434,15 @@ class MMPChecker:
 
         error_msg, mol_record = parse_record(chembl_id, smiles, self.mol_filter)
         if error_msg is not None:
-            frags_record = None
-        else:
-            frags = fragment_mol(
-                mol_record.normalized_mol, self.mol_filter, mol_record.num_normalized_heavies
-            )
-            frags_record = {
-                f"{frag.constant_smiles}.{frag.attachment_order}": frag for frag in frags
-            }
+            return None
+
+        frags = fragment_mol(
+            mol_record.normalized_mol, self.mol_filter, mol_record.num_normalized_heavies
+        )
+        frags_record = {
+            f"{frag.constant_smiles}.{frag.attachment_order}": frag for frag in frags
+        }
 
         return frags_record
 
 
-def skip_null(func: Callable[[T], U]) -> Callable[[Optional[T]], Optional[U]]:
-    def wrapper(*args, **kwargs):
-        if None in args or None in kwargs.values():
-            return None
-        else:
-            res = func(*args, **kwargs)
-            return res
-
-    return wrapper
-
-
-class Metrics(ABC):
-    EXPECTED_COLS: List[str]
-    SMILES_COLS: List[str]
-    df: pd.DataFrame
-    tqdm.pandas()
-
-    @abstractmethod
-    def visual(self) -> None:
-        raise NotImplementedError
-
-    @staticmethod
-    def render_romol(df: pd.DataFrame) -> None:
-        PandasTools.molRepresentation = "svg"
-        PandasTools.ChangeMoleculeRendering(df)
-
-    @staticmethod
-    def get_mol(smiles: Optional[str]) -> Optional[Mol]:
-        try:
-            mol = Chem.MolFromSmiles(smiles)
-        except:
-            return None
-        return mol
-
-    @staticmethod
-    @skip_null
-    def get_sascore(mol: Mol) -> float:
-        return sascorer.calculateScore(mol)
-
-    @staticmethod
-    @skip_null
-    def get_qed(mol: Mol) -> float:
-        return Descriptors.qed(mol)
-
-    @staticmethod
-    @skip_null
-    def get_weight(mol: Mol) -> float:
-        return Descriptors.MolWt(mol)
-
-    @staticmethod
-    @skip_null
-    def get_scaffold(mol: Mol) -> str:
-        return Chem.MolToSmiles(Scaffolds.MurckoScaffold.GetScaffoldForMol(mol))
-
-    @staticmethod
-    @skip_null
-    def get_similarity(mol_a: Mol, mol_b: Mol) -> float:
-        fp_a, fp_b = tuple(MACCSkeys.GenMACCSKeys(mol) for mol in (mol_a, mol_b))
-        return DataStructs.TanimotoSimilarity(fp_a, fp_b)
-
-    def cano_smiles(self, col: str) -> None:
-        self.df[col] = self.df[col].progress_apply(canonicalize_smiles)
-
-    def cano_selfies(self, col: str) -> None:
-        self.df[col] = self.df[col].progress_apply(selfies2smiles)
-
-    def metric_mol(self, col: str) -> pd.Series:
-        return self.df[col].progress_apply(self.get_mol)
-
-    def metric_heavy(self, col: str) -> pd.Series:
-        return self.df[col].astype("int32")
-
-    def metric_sascore(self, col: str) -> pd.Series:
-        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_sascore(s)))
-
-    def metric_qed(self, col: str) -> pd.Series:
-        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_qed(s)))
-
-    def metric_weight(self, col: str) -> pd.Series:
-        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_weight(s)))
-
-    def metric_scaffold(self, col: str) -> pd.Series:
-        return self.df[col].progress_apply(lambda s: self.get_mol(self.get_scaffold(s)))
-
-    def metric_frag_sim(self, col_a: str, col_b: str) -> pd.Series:
-        return self.df.progress_apply(
-            lambda df: self.get_similarity(self.get_mol(df[col_a]), self.get_mol(df[col_b])), axis=1
-        )
-
-    def metric_frag_prop(self, frag_col: str, core_col: str) -> pd.Series:
-        return self.df[frag_col] / self.df[core_col]
-
-    def visual(self, save_path: str, nrows: int = -1) -> None:
-        visual_df = self.df[self.EXPECTED_COLS]
-
-        if nrows != -1:
-            visual_df = visual_df.iloc[:nrows]
-
-        self.render_romol(visual_df)
-        for col in self.SMILES_COLS:
-            visual_df[f"{col}_romol"] = visual_df[col].progress_apply(self.get_mol)
-
-        visual_df.to_html(save_path)
-
-
-class DatasetMetrics(Metrics):
-    EXPECTED_COLS = [
-        "src",
-        "tgt",
-        "core",
-        "frag_a",
-        "frag_b",
-        "core_heavy",
-        "frag_a_heavy",
-        "frag_b_heavy",
-    ]
-    SMILES_COLS = ["src", "tgt", "core", "frag_a", "frag_b"]
-
-    def __init__(self, df: pd.DataFrame) -> None:
-        assert set(df.columns.to_list()) == set(
-            self.EXPECTED_COLS
-        ), f"Expected DataFrame with columns {self.EXPECTED_COLS} but got {df.columns.to_list()}."
-        self.df = df.reindex(columns=self.EXPECTED_COLS)
-        self.render_romol(self.df)
-
-
-class ResultMetrics(Metrics):
-    EXPECTED_COLS = [
-        "src",
-        "tgt",
-        "core",
-        "frag_a",
-        "frag_b",
-        "out",
-        "gen_core",
-        "gen_frag_a",
-        "gen_frag_b",
-        "gen_core_heavy",
-        "gen_frag_a_heavy",
-        "gen_frag_b_heavy",
-    ]
-    SMILES_COLS = [
-        "src",
-        "tgt",
-        "core",
-        "frag_a",
-        "frag_b",
-        "out",
-        "gen_core",
-        "gen_frag_a",
-        "gen_frag_b",
-    ]
-
-    def __init__(
-        self, df: pd.DataFrame, data_format: Literal["SMILES", "SELFIES"] = "SMILES", topk: int = 1
-    ) -> None:
-        assert set(df.columns.to_list()) == set(
-            self.EXPECTED_COLS
-        ), f"Expected DataFrame with columns {self.EXPECTED_COLS} but got {df.columns.to_list()}."
-        assert df.shape[0] % topk == 0, f"DataFrame with shape {df.shape} cannot be divided by topk `{topk}`."
-        self.df = df.reindex(columns=self.EXPECTED_COLS)
-        self.render_romol(self.df)
-        self.data_format = data_format
-        self.topk = topk
-        self.result_group = self.df.shape[0] // topk
-
-    def concat_tokens(self) -> None:
-        self.df["src"] = self.df["src"].progress_apply(lambda s: "".join(s.strip().split(" ")))
-        self.df["out"] = self.df["out"].progress_apply(
-            lambda s: "".join(s.strip("{eos}").strip().split(" "))
-        )
-        if self.data_format == "SELFIES":
-            self.df["src"] = self.df["src"].progress_apply(selfies2smiles)
-            self.df["out"] = self.df["out"].progress_apply(selfies2smiles)
-
-    def visual(self, save_path: str, nrows: int = -1) -> None:
-        self.concat_tokens()
-        return super().visual(save_path, nrows)
-
-    def basic_metric(self) -> None:
-        # Validity, MMP Validity, Recovery, Uniqueness, Novelty
-        self.concat_tokens()
-        self.cano_smiles("out")
-        size = self.df.shape[0]
-
-        validity = len(self.df["out"].dropna()) / size
-        mmp_validity = len(self.df["gen_core"].dropna()) / size
-        strict_recovery = (self.df["out"] == self.df["tgt"]).sum() / size
-
-        groups = self.df.groupby("src")
-        recovery_dict = {group[0]: frozenset(group[1]["tgt"].to_list()) for group in groups}
-        recovery_cnt = 0
-        core_recovery_cnt = 0
-        frequent_core_recovery_cnt = 0
-        for i in range(self.result_group):
-            unique_out = set(self.df["out"][i : i + self.topk].to_list())
-            if unique_out & recovery_dict[self.df["src"][i]]:
-                recovery_cnt += 1
-
-            frequent_core = self.df["gen_core"][i : i + self.topk].value_counts(dropna=False).index[0]
-            if frequent_core == self.df["core"][i]:
-                frequent_core_recovery_cnt += 1
-
-            unique_core = set(self.df["gen_core"][i : i + self.topk].to_list())
-            if self.df["core"][i] in unique_core:
-                core_recovery_cnt += 1
-
-        recovery = recovery_cnt / self.result_group
-        core_group_recovery = core_recovery_cnt / self.result_group
-        frequent_core_recovery = frequent_core_recovery_cnt / self.result_group
-
-        core_recovery = (self.df["gen_core"] == self.df["core"]).sum() / size
-        frag_a_recovery = (self.df["gen_frag_a"] == self.df["frag_a"]).sum() / size
-        frag_b_recovery = (self.df["gen_frag_b"] == self.df["frag_b"]).sum() / size
-
-        uniqueness = len(self.df["out"].dropna().drop_duplicates()) / size
-        unique_tgt = set(self.df["tgt"].drop_duplicates().to_list())
-        novel_out = self.df["out"].apply(lambda s: 1 if s in unique_tgt else 0)
-        novelty = novel_out.sum() / size
-
-        metric_infos = [
-            ["Metrics", "Value"],
-            ["Mol Validity", f"{validity:.4f}"],
-            ["MMP Validity", f"{mmp_validity:.4f}"],
-            ["Strict Recovery", f"{strict_recovery:.4f}"],
-            ["Recovery", f"{recovery:.4f}"],
-            ["Core Recovery", f"{core_recovery:.4f}"],
-            ["Core Group Recovery", f"{core_group_recovery:.4f}"],
-            ["Frequent Core Recovery", f"{frequent_core_recovery:.4f}"],
-            ["Truncated Frag Recovery", f"{frag_a_recovery:.4f}"],
-            ["Spliced Frag Recovery", f"{frag_b_recovery:.4f}"],
-            ["Uniqueness", f"{uniqueness:.4f}"],
-            ["Novelty", f"{novelty:.4f}"],
-        ]
-        table = AsciiTable(metric_infos)
-        table.title = f"Basic Metrics (Total: {size})"
-        table.inner_row_border = True
-        print(table.table)
