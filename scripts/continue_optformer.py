@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     train_dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
-        ("mol_a", "mol_b", "sequence"),
+        cfg.data_cols,
         mol_tokenizer=mol_tokenizer,
         prot_tokenizer=prot_tokenizer,
         mol_max_len=cfg.mol_max_len,
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     )
     val_dataset = MolProtPairDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
-        ("mol_a", "mol_b", "sequence"),
+        cfg.data_cols,
         mol_tokenizer=mol_tokenizer,
         prot_tokenizer=prot_tokenizer,
         mol_max_len=cfg.mol_max_len,
@@ -93,14 +93,18 @@ if __name__ == "__main__":
 
     cfg.set("vocab_size", mol_tokenizer.vocab_size)
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
+    cfg.set("bos_value", mol_tokenizer.vocab2index[mol_tokenizer.bos])
 
-    launcher = ModelLauncher("Optformer", cfg, logger, "finetune", device)
+    launcher = ModelLauncher("Optformer", cfg, logger, "continue", device)
     model = launcher.get_model()
+    ckpt = launcher.get_ckpt_state()
 
     optimizer = Adam(params=model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    optimizer.load_state_dict(ckpt["optimizer"])
     scheduler = CosineAnnealingWarmRestarts(
         optimizer=optimizer, T_0=750, T_mult=2, eta_min=cfg.min_learning_rate
     )
+    scheduler.load_state_dict(ckpt["scheduler"])
     criterion = nn.CrossEntropyLoss(ignore_index=cfg.pad_value)
 
     if cfg.data_format == "SMILES":
@@ -123,7 +127,7 @@ if __name__ == "__main__":
         criterion=criterion,
         metrics=metrics,
         saver=saver,
-        tokenizer=mol_tokenizer,
+        bos_value=cfg.bos_value,
         device=device,
         logger=logger,
         log_interval=cfg.log_interval,

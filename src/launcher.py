@@ -14,7 +14,7 @@ class ModelLauncher:
         model_name: Literal["Transformer", "Optformer"],
         cfg: Cfg,
         logger: Log,
-        stage: Literal["train", "finetune", "inference"],
+        stage: Literal["train", "finetune", "inference", "continue"],
         device: Device,
     ) -> None:
         self.model_name = model_name
@@ -92,6 +92,8 @@ class ModelLauncher:
             self.__load_state_dict()
         elif self.stage == "inference":
             self.__load_state_dict()
+        elif self.stage == "continue":
+            self.__load_state_dict()
         else:
             assert False, f"'{self.stage}' is not a valid attribute of stage."
 
@@ -101,7 +103,13 @@ class ModelLauncher:
             map_location=self.device,
         )
         self.model.load_state_dict(ckpt["model"])
+        if self.stage == "continue":
+            self.ckpt = ckpt
         self.logger.info(f"Loaded model from '{osp.join(self.cfg.CKPT_DIR, self.cfg.ckpt_path)}'.")
 
     def get_model(self):
         return self.model
+
+    def get_ckpt_state(self):
+        assert self.stage == "continue"
+        return self.ckpt
