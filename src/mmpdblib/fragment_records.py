@@ -33,8 +33,9 @@
 
 import sys
 
-from . import fragment_types
-from . import fileio
+from rdkit import Chem
+
+from . import fileio, fragment_types
 
 
 def _as_list(method, normalized_mol, fragment_filter, num_normalized_heavies):
@@ -64,15 +65,21 @@ class ParsedSmilesRecord(object):
 
 
 def parse_record(id, smiles, fragment_filter):
-    from rdkit import Chem
-    from . import fragment_algorithm
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+    except:
+        mol = None
 
-    mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return "invalid smiles", ParsedSmilesRecord(id, smiles, mol, None, None, 0)
 
     errmsg, normalized_mol = fragment_filter.normalize(mol)
-    normalized_smiles = Chem.MolToSmiles(normalized_mol, isomericSmiles=True)
+
+    try:
+        normalized_smiles = Chem.MolToSmiles(normalized_mol, isomericSmiles=True)
+    except:
+        return "invalid smiles", ParsedSmilesRecord(id, smiles, mol, None, None, 0)
+
     if errmsg is None:
         if "." in normalized_smiles:
             errmsg = "multiple fragments"

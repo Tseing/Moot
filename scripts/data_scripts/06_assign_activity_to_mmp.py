@@ -33,7 +33,7 @@ def cons_value_dict(activity_df: pd.DataFrame) -> Dict[str, Dict[str, float]]:
 def compare_values(
     value_a: float, value_b: float, unit: str
 ) -> Optional[Literal["revert", "keep"]]:
-
+    # more active when value is larger (unit: %)
     if unit == "%":
         diff = value_b - value_a
         # 50
@@ -43,6 +43,7 @@ def compare_values(
             return "keep"
         else:
             return "revert"
+    # more active when value is smaller (unit: uM)
     else:
         if value_a == 0:
             return None

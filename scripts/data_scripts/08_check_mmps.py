@@ -1,29 +1,31 @@
+import os.path as osp
 import sys
+from typing import Literal
 
 sys.path.append("../..")
 
-from typing import Literal
-
 import pandas as pd
+from pandarallel import pandarallel
 from tqdm import tqdm
 
-from src.data_utils import LookupDict, MMPChecker, selfies2smiles
+from src.data_utils import MMPChecker, selfies2smiles
+
+tqdm.pandas()
 
 
 # Training datasets
-def check_inp_mmp():
-    smiles_dict = LookupDict("../../data/all/smiles_lookup.pkl")
+def check_inp_mmp(data_path: str):
     checker = MMPChecker()
-    df = pd.read_csv("../../data/pretrain/pretrain.csv", usecols=["mol_a", "mol_b"])
+    df = pd.read_csv(data_path, usecols=["mol_a_smiles", "mol_b_smiles"])
 
-    df["mol_a_smi"] = df["mol_a"].progress_apply(smiles_dict.lookup)
-    df["mol_b_smi"] = df["mol_b"].progress_apply(smiles_dict.lookup)
-    smiles_list = pd.concat([df["mol_a_smi"], df["mol_a_smi"]], axis=0).drop_duplicates().to_list()
+    smiles_list = (
+        pd.concat([df["mol_a_smiles"], df["mol_b_smiles"]], axis=0).drop_duplicates().to_list()
+    )
 
     checker.cache_records(smiles_list, "./cached_records.pkl", worker=128)
 
     check_results = df.progress_apply(
-        lambda df: checker.check_mmp(df["mol_a_smi"], df["mol_b_smi"]), axis=1
+        lambda df: checker.check_mmp(df["mol_a_smiles"], df["mol_b_smiles"]), axis=1
     ).to_list()
 
     mmp_infos = [
@@ -33,21 +35,23 @@ def check_inp_mmp():
         mmp_infos,
         columns=["core", "core_heavy", "frag_a", "frag_a_heavy", "frag_b", "frag_b_heavy"],
     )
-    mmp_df.to_csv("../../data/pretrain/pretrain_mmp.csv", index=False)
+
+    mmp_df.to_csv(f"{osp.splitext(data_path)[0]}_mmp.csv", index=False)
 
 
 # Generated molecule
-def check_out_mmp(gen_path: str, gen_format: Literal["SMILES", "SELFIES"], save_path: str):
+def check_out_mmp(data_path: str, data_format: Literal["SMILES", "SELFIES"], worker: int = 10):
     # Process Output SMILES / SELFIES
-    gen_df = pd.read_csv(gen_path, usecols=["input", "output"])
-    inp_smi = gen_df["input"].progress_apply(lambda s: "".join(s.strip().split(" ")))
-    out_smi = gen_df["output"].progress_apply(
+    pandarallel.initialize(nb_workers=worker, progress_bar=True)
+    gen_df = pd.read_csv(data_path, usecols=["input", "output"])
+    inp_smi = gen_df["input"].parallel_apply(lambda s: "".join(s.strip().split(" ")))
+    out_smi = gen_df["output"].parallel_apply(
         lambda s: "".join(s.strip("{eos}").strip().split(" "))
     )
 
-    if gen_format == "SELFIES":
-        inp_smi = inp_smi.progress_apply(selfies2smiles)
-        out_smi = out_smi.progress_apply(selfies2smiles)
+    if data_format == "SELFIES":
+        inp_smi = inp_smi.parallel_apply(selfies2smiles)
+        out_smi = out_smi.parallel_apply(selfies2smiles)
 
     del gen_df
     df = pd.concat([inp_smi, out_smi], axis=1)
@@ -58,6 +62,7 @@ def check_out_mmp(gen_path: str, gen_format: Literal["SMILES", "SELFIES"], save_
     checker = MMPChecker()
     checker.cache_records(smiles_list, "./cached_records.pkl", worker=128)
 
+    # get stuck when use `parallel_apply` on large DataFrame
     check_results = df.progress_apply(
         lambda df: checker.check_mmp(df["inp_smi"], df["out_smi"]), axis=1
     ).to_list()
@@ -76,16 +81,17 @@ def check_out_mmp(gen_path: str, gen_format: Literal["SMILES", "SELFIES"], save_
             "gen_frag_b_heavy",
         ],
     )
-    mmp_df.to_csv(save_path, index=False)
+    mmp_df.to_csv(f"{osp.splitext(data_path)[0]}_mmp.csv", index=False)
 
 
 if __name__ == "__main__":
     from rdkit import rdBase
 
     rdBase.DisableLog("rdApp.*")
-    tqdm.pandas()
+
+    # check_inp_mmp("../../data/exdata/exdata_proc_duplicate.csv")
+
     check_out_mmp(
-        gen_path="../../output/finetune/0819finetune_epoch10_transformer_selfies_top1.csv",
-        gen_format="SELFIES",
-        save_path="../../output/finetune/0819finetune_epoch10_transformer_selfies_top1_mmp.csv",
+        data_path="../../output/top10/train_transformer_selfies_top10.csv",
+        data_format="SELFIES",
     )
