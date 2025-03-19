@@ -5,6 +5,7 @@ data/all/*
 log/
 checkpoints/
 output/
+scripts/tasks/deprecated
 scripts/data_scripts/deprecated
 scripts/plot_scripts/output
 *.ipynb

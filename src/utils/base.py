@@ -3,7 +3,7 @@ import logging
 import os
 import os.path as osp
 import time
-from typing import Any, Iterable, List, Sequence, Tuple, Union
+from typing import Any, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import yaml
@@ -223,6 +223,8 @@ class Cfg:
             if not osp.exists(folder):
                 os.mkdir(folder)
 
+        self._cfg: Optional[dict] = None
+
     def __getattr__(self, name: str) -> Any:
         return self._cfg[name]
 
@@ -266,13 +268,19 @@ class Cfg:
 
         return cfg
 
-    def parse(self):
+    def parse(self) -> None:
+        assert self._cfg is None, f"Params are already loaded: {self._cfg}"
         cli_cfg = self._load_cli()
         assert cli_cfg is not None, "Cannot fetch any command line config."
         cfg_file = cli_cfg.cfg_file
         self._cfg = self._load_local(cfg_file)
 
+    def load(self, params: dict[str, Any]) -> None:
+        assert self._cfg is None, f"Params are already loaded: {self._cfg}."
+        self._cfg = params
+
     def set(self, key: str, value: Any) -> None:
+        assert self._cfg is not None
         if key in self._cfg.keys():
             raise AttributeError(f"Key '{key}' is in configs and its value is '{self._cfg[key]}'.")
         self._cfg[key] = value

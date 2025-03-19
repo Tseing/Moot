@@ -1,0 +1,46 @@
+# project
+task_name: "train_optformer_smiles_cpi"
+device: "cuda"
+ckpt_path: "train_optformer_smiles/model_epoch14_step0.pt"
+train_data_path: "bindingdb/train.csv"
+val_data_path: "bindingdb/val.csv"
+test_data_path: "bindingdb/test.csv"
+word_table_path: "all/smiles_word_table.yaml"
+data_format: "SMILES"
+data_cols: ["smiles", "sequence", "label"]
+
+# train
+learning_rate: 1.0e-4
+min_learning_rate: 1.0e-6
+# warming_steps * bsz / all_size = n_warming_epoch
+warming_step: 7840   # 10 epoch
+weight_decay: 1.0e-5
+batch_size: 64
+epoch_num: 75
+log_interval: 50
+seed: 42
+save_interval: 1
+
+# classifier
+d_classifier: 1024
+
+# encoder model
+model: "Optformer"
+mol_max_len: 250
+prot_max_len: 1500
+left_pad: False
+d_model: 512
+n_head: 4
+d_enc_ffn: 1024
+d_dec_ffn: 1024
+d_fuse_ffn: 1024
+enc_n_layer: 2
+dec_n_layer: 4
+enc_dropout: 0.2
+dec_dropout: 0.2
+enc_embed_dropout: 0.15
+dec_embed_dropout: 0.15
+enc_relu_dropout: 0.1
+dec_relu_dropout: 0.1
+enc_attn_dropout: 0.15
+dec_attn_dropout: 0.15

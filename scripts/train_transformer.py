@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     train_dataset = MolPairDataset(
         osp.join(cfg.DATA_DIR, cfg.train_data_path),
-        ("mol_a", "mol_b"),
+        cfg.data_cols,
         tokenizer=mol_tokenizer,
         max_len=cfg.max_len,
         left_pad=cfg.left_pad,
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     )
     val_dataset = MolPairDataset(
         osp.join(cfg.DATA_DIR, cfg.val_data_path),
-        ("mol_a", "mol_b"),
+        cfg.data_cols,
         tokenizer=mol_tokenizer,
         max_len=cfg.max_len,
         left_pad=cfg.left_pad,

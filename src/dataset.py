@@ -383,3 +383,86 @@ class FragProtPairDataset(MolProtPairDataset):
         tokenized_tgt = self.mol_tokenizer.tokenize(tgt).astype(self.dtype)
 
         return (tokenized_mol, tokenized_prot), tokenized_tgt
+
+
+class MolClassifyDataset(Dataset):
+    def __init__(
+        self,
+        data_path,
+        data_cols,
+        tokenizer: MolTokenizer,
+        max_len: Optional[int],
+        dtype: DTypeLike = np.int32,
+    ):
+        super().__init__()
+        df = pd.read_csv(data_path, usecols=data_cols)
+        df = df.reindex(columns=data_cols)
+        self.data = df.to_numpy()
+        self.len = self.data.shape[0]
+        self.dtype = dtype
+        self.tokenizer = tokenizer
+        self.max_len = max_len
+        self.pad_value = tokenizer.vocab2index[tokenizer.pad]
+
+    def __len__(self) -> int:
+        return self.len
+
+    def __getitem__(self, index: int) -> Tuple[Input, NDArray]:
+        src, label = self.data[index]
+        tokenized_src = self.tokenizer.tokenize(src).astype(self.dtype)
+
+        if tokenized_src.shape[0] > self.max_len:
+            padded_src = tokenized_src[: self.max_len]
+        else:
+            padded_src = pad_sequence(tokenized_src, self.max_len, self.pad_value, left_pad=False)
+
+        return padded_src, np.array([label], dtype=np.float32)
+
+
+class MolProtClassifyDataset(Dataset):
+    def __init__(
+        self,
+        data_path,
+        data_cols,
+        mol_tokenizer: MolTokenizer,
+        prot_tokenizer: ProteinTokenizer,
+        mol_max_len: Optional[int],
+        prot_max_len: Optional[int],
+        dtype: DTypeLike = np.int32,
+    ):
+        super().__init__()
+        df = pd.read_csv(data_path, usecols=data_cols)
+        df = df.reindex(columns=data_cols)
+        self.data = df.to_numpy()
+        self.len = self.data.shape[0]
+        self.dtype = dtype
+        self.mol_tokenizer = mol_tokenizer
+        self.prot_tokenizer = prot_tokenizer
+        self.mol_max_len = mol_max_len
+        self.prot_max_len = prot_max_len
+        self.pad_value = mol_tokenizer.vocab2index[mol_tokenizer.pad]
+
+    def __len__(self) -> int:
+        return self.len
+
+    def __getitem__(self, index: int) -> Tuple[Input, NDArray]:
+        mol, prot, label = self.data[index]
+        tokenized_mol = self.mol_tokenizer.tokenize(mol).astype(self.dtype)
+        prot = "".join([f"-{letter}" for letter in prot])
+        tokenized_prot = self.prot_tokenizer.tokenize(prot).astype(self.dtype)
+
+        if tokenized_mol.shape[0] > self.mol_max_len:
+            padded_mol = tokenized_mol[: self.mol_max_len]
+        else:
+            padded_mol = pad_sequence(
+                tokenized_mol, self.mol_max_len, self.pad_value, left_pad=False
+            )
+
+        if tokenized_prot.shape[0] > self.prot_max_len:
+            padded_prot = tokenized_prot[: self.prot_max_len]
+        else:
+            padded_prot = pad_sequence(
+                tokenized_prot, self.prot_max_len, self.pad_value, left_pad=False
+            )
+
+        return (padded_mol, padded_prot), np.array([label], dtype=np.float32)
