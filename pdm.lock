@@ -5,10 +5,21 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:b245b0605dba3601494fd9f81b52ccd166f74faff42cf88bd22a131a668fded6"
+content_hash = "sha256:b6ab951e4b343ff00a054bb5bf35c3605fc91cc8299ebe863522b081910f0068"
 
 [[metadata.targets]]
 requires_python = "==3.9.*"
+
+[[package]]
+name = "blinker"
+version = "1.9.0"
+requires_python = ">=3.9"
+summary = "Fast, simple object-to-object and broadcast signaling"
+groups = ["default"]
+files = [
+    {file = "blinker-1.9.0-py3-none-any.whl", hash = "sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc"},
+    {file = "blinker-1.9.0.tar.gz", hash = "sha256:b4ce2265a7abece45e7cc896e98dbebe6cead56bcf805a3d23136d145f5445bf"},
+]
 
 [[package]]
 name = "click"
@@ -97,6 +108,40 @@ files = [
 ]
 
 [[package]]
+name = "flask"
+version = "3.1.0"
+requires_python = ">=3.9"
+summary = "A simple framework for building complex web applications."
+groups = ["default"]
+dependencies = [
+    "Jinja2>=3.1.2",
+    "Werkzeug>=3.1",
+    "blinker>=1.9",
+    "click>=8.1.3",
+    "importlib-metadata>=3.6; python_version < \"3.10\"",
+    "itsdangerous>=2.2",
+]
+files = [
+    {file = "flask-3.1.0-py3-none-any.whl", hash = "sha256:d667207822eb83f1c4b50949b1623c8fc8d51f2341d65f72e1a1815397551136"},
+    {file = "flask-3.1.0.tar.gz", hash = "sha256:5f873c5184c897c8d9d1b05df1e3d01b14910ce69607a117bd3277098a5836ac"},
+]
+
+[[package]]
+name = "flask-cors"
+version = "5.0.1"
+requires_python = "<4.0,>=3.9"
+summary = "A Flask extension simplifying CORS support"
+groups = ["default"]
+dependencies = [
+    "Werkzeug>=0.7",
+    "flask>=0.9",
+]
+files = [
+    {file = "flask_cors-5.0.1-py3-none-any.whl", hash = "sha256:fa5cb364ead54bbf401a26dbf03030c6b18fb2fcaf70408096a572b409586b0c"},
+    {file = "flask_cors-5.0.1.tar.gz", hash = "sha256:6ccb38d16d6b72bbc156c1c3f192bc435bfcc3c2bc864b2df1eb9b2d97b2403c"},
+]
+
+[[package]]
 name = "fonttools"
 version = "4.54.1"
 requires_python = ">=3.8"
@@ -127,6 +172,22 @@ files = [
 ]
 
 [[package]]
+name = "importlib-metadata"
+version = "8.6.1"
+requires_python = ">=3.9"
+summary = "Read metadata from Python packages"
+groups = ["default"]
+marker = "python_version < \"3.10\""
+dependencies = [
+    "typing-extensions>=3.6.4; python_version < \"3.8\"",
+    "zipp>=3.20",
+]
+files = [
+    {file = "importlib_metadata-8.6.1-py3-none-any.whl", hash = "sha256:02a89390c1e15fdfdc0d7c6b25cb3e62650d0494005c97d6f148bf5b9787525e"},
+    {file = "importlib_metadata-8.6.1.tar.gz", hash = "sha256:310b41d755445d74569f993ccfc22838295d9fe005425094fad953d7f15c8580"},
+]
+
+[[package]]
 name = "importlib-resources"
 version = "6.4.5"
 requires_python = ">=3.8"
@@ -139,6 +200,17 @@ dependencies = [
 files = [
     {file = "importlib_resources-6.4.5-py3-none-any.whl", hash = "sha256:ac29d5f956f01d5e4bb63102a5a19957f1b9175e45649977264a1416783bb717"},
     {file = "importlib_resources-6.4.5.tar.gz", hash = "sha256:980862a1d16c9e147a59603677fa2aa5fd82b87f223b6cb870695bcfce830065"},
+]
+
+[[package]]
+name = "itsdangerous"
+version = "2.2.0"
+requires_python = ">=3.8"
+summary = "Safely pass data to untrusted environments and back."
+groups = ["default"]
+files = [
+    {file = "itsdangerous-2.2.0-py3-none-any.whl", hash = "sha256:c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef"},
+    {file = "itsdangerous-2.2.0.tar.gz", hash = "sha256:e0050c0b7da1eea53ffaf149c0cfbb5c6e2e2b69c4bef22c81fa6eb73e5f6173"},
 ]
 
 [[package]]
@@ -677,6 +749,20 @@ groups = ["default"]
 files = [
     {file = "tzdata-2024.2-py2.py3-none-any.whl", hash = "sha256:a48093786cdcde33cad18c2555e8532f34422074448fbc874186f0abd79565cd"},
     {file = "tzdata-2024.2.tar.gz", hash = "sha256:7d85cc416e9382e69095b7bdf4afd9e3880418a2413feec7069d533d6b4e31cc"},
+]
+
+[[package]]
+name = "werkzeug"
+version = "3.1.3"
+requires_python = ">=3.9"
+summary = "The comprehensive WSGI web application library."
+groups = ["default"]
+dependencies = [
+    "MarkupSafe>=2.1.1",
+]
+files = [
+    {file = "werkzeug-3.1.3-py3-none-any.whl", hash = "sha256:54b78bf3716d19a65be4fceccc0d1d7b89e608834989dfae50ea87564639213e"},
+    {file = "werkzeug-3.1.3.tar.gz", hash = "sha256:60723ce945c19328679790e3282cc758aa4a6040e4bb330f53d30fa546d44746"},
 ]
 
 [[package]]

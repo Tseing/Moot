@@ -3,7 +3,7 @@
 data/*
 data/all/*
 log/
-checkpoints/
+*.pt
 output/
 scripts/tasks/deprecated
 scripts/data_scripts/deprecated

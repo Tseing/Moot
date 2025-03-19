@@ -157,6 +157,39 @@ class Inferencer:
             assert save_path is not None
             self._write_result(indices, results, save_path)
 
+    def interactive(self, batch, nbest: int):
+        if nbest < 1 or nbest > self.translator.beam_size:
+            raise AttributeError(
+                "`nbest` should be a value in interval (0, beam_size]. "
+                f"Inference beam_size is {self.translator.beam_size}."
+            )
+        self.nbest = nbest
+
+        indices = []
+        results = []
+
+        _, tgt = batch
+        indices.extend([0] * tgt.shape[0])
+        results += self.process_batch(batch)
+
+        inps = []
+        outps = []
+
+        for i, _ in enumerate(indices):
+            result = results[i]
+            inp_array = result.src_str.cpu().numpy()
+            inp = " ".join(self.tokenizer.vec_ids2tokens(self.tokenizer.trim(inp_array)))
+            hypos = result.hypos
+
+            inps.extend([inp for _ in range(self.nbest)])
+            outps.extend([hypo[1] for hypo in hypos[: min(self.nbest, len(hypos))]])
+
+            # match items number of inps and outps
+            if len(hypos) < self.nbest:
+                outps.extend(["" for _ in range(self.nbest - len(hypos))])
+
+        return outps
+
     def _show_result(self, indices: list, results: list) -> None:
         for i, _ in enumerate(np.argsort(indices)):
             result = results[i]
@@ -181,7 +214,7 @@ class Inferencer:
             hypos = result.hypos
 
             inps.extend([inp for _ in range(self.nbest)])
-            outps.extend([hypo[1] for hypo in hypos[:min(self.nbest, len(hypos))]])
+            outps.extend([hypo[1] for hypo in hypos[: min(self.nbest, len(hypos))]])
 
             # match items number of inps and outps
             if len(hypos) < self.nbest:
@@ -193,4 +226,3 @@ class Inferencer:
         except:
             pickle.dump((inps, outps), open(f"{osp.splitext(save_path)[0]}.pkl", "wb"))
             print("Failed to save csv reuslt, pickle file is saved.")
-        
