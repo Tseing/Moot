@@ -17,6 +17,7 @@ scripts/plot_scripts/output
 !data/frag/
 !data/frag/*.yaml
 archived/
+!docs/*.svg
 
 # Ascend-compiled
 extra-info/
