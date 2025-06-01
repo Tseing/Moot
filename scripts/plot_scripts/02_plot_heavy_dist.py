@@ -4,7 +4,6 @@ sys.path.append("../..")
 
 import matplotlib.pyplot as plt
 
-import config
 from src.data_utils import DatasetMetrics
 from utils import DataReader
 

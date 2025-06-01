@@ -79,11 +79,16 @@ class CoreInferencer:
         padded_atoms = padded_atoms[:, :-1]
 
         if proteins_list:
-            proteins = [self.protein_tokenizer.tokenize(protein) for protein in proteins_list]
-            padded_proteins = torch.Tensor(
-                pad_sequences(proteins, self.pad_value, left_pad=False)
-            ).to(self.device)
-            data = (padded_mols, padded_atoms, padded_proteins)
+            proteins = [
+                self.protein_tokenizer.tokenize("-" + "-".join(protein))
+                for protein in proteins_list
+            ]
+            padded_proteins = (
+                torch.Tensor(pad_sequences(proteins, self.pad_value, left_pad=False))
+                .to(self.device)
+                .int()
+            )
+            data = (padded_mols, padded_proteins, padded_atoms)
         else:
             data = (padded_mols, padded_atoms)
 
@@ -93,8 +98,14 @@ class CoreInferencer:
     def _inference(self, data: Tuple[torch.Tensor, ...], mask: torch.Tensor) -> torch.Tensor:
         out, _ = model(*data)
 
-        sorted_idx = torch.argsort(out, dim=2)
-        order_matrix = torch.arange(0, out.shape[-1]).unsqueeze(0).unsqueeze(0).expand(out.shape)
+        sorted_idx = torch.argsort(out, dim=2).to(self.device)
+        order_matrix = (
+            torch.arange(0, out.shape[-1])
+            .unsqueeze(0)
+            .unsqueeze(0)
+            .expand(out.shape)
+            .to(self.device)
+        )
         rank = order_matrix[sorted_idx == self.dummy_value].reshape(-1, out.shape[1])
         rank[mask] = 0
         return F.softmax(rank.float(), dim=-1)
@@ -111,14 +122,23 @@ if __name__ == "__main__":
     atom_tokenizer = AtomTokenizer()
     mol_tokenizer = SmilesTokenizer()
     mol_tokenizer.load_word_table(osp.join(cfg.DATA_DIR, cfg.word_table_path))
-    atom_tokenizer, mol_tokenizer = share_vocab(atom_tokenizer, mol_tokenizer)
+
+    if cfg.model == "Optformer":
+        prot_tokenizer = ProteinTokenizer()
+        atom_tokenizer, prot_tokenizer, mol_tokenizer = share_vocab(
+            atom_tokenizer, prot_tokenizer, mol_tokenizer
+        )
+    else:
+        prot_tokenizer = None
+        atom_tokenizer, mol_tokenizer = share_vocab(atom_tokenizer, mol_tokenizer)
+
     cfg.set("vocab_size", mol_tokenizer.vocab_size)
     cfg.set("pad_value", mol_tokenizer.vocab2index[mol_tokenizer.pad])
 
     launcher = ModelLauncher(cfg.model, cfg, logger, "inference", device)
     model = launcher.get_model()
 
-    inferencer = CoreInferencer(model, mol_tokenizer, atom_tokenizer, device=device)
+    inferencer = CoreInferencer(model, mol_tokenizer, atom_tokenizer, prot_tokenizer, device=device)
 
     chunks = pd.read_csv(
         osp.join(cfg.DATA_DIR, cfg.test_data_path), chunksize=cfg.batch_size, usecols=cfg.data_cols
@@ -141,7 +161,7 @@ if __name__ == "__main__":
     for chunk in tqdm(chunks):
         smiles_list, protein_list = _get_data(chunk)
         prob = inferencer.inference(smiles_list, protein_list)
-        idxes = prob.argmax(dim=-1).tolist()
+        idxes = prob.argmax(dim=-1).cpu().tolist()
 
         for i, dummy_idx in enumerate(idxes):
             results["core"].append(inferencer.get_core(smiles_list[i], int(dummy_idx)))
@@ -149,5 +169,4 @@ if __name__ == "__main__":
         results["input"].extend(smiles_list)
         results["atom_idx"].extend(idxes)
 
-    pd.DataFrame(results).to_csv(osp.join(cfg.OUTPUT_DIR, cfg.save_path))
-
+    pd.DataFrame(results).to_csv(osp.join(cfg.OUTPUT_DIR, cfg.save_path), index=False)

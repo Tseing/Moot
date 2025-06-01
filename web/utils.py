@@ -241,7 +241,7 @@ def clean_data(form: dict) -> Tuple[bool, str]:
     form["_cleaned_data"]["mode"] = form["mode"]
     form["_cleaned_data"]["beam_size"] = form["beam_size"]
     print(form["_cleaned_data"])
-    return True, "Validate and cleaned form data."
+    return True, "Validated and cleaned form data."
 
 
 def post_process(output: List[str]) -> List[str]:
