@@ -14,6 +14,8 @@ scripts/data_scripts/deprecated
 scripts/plot_scripts/output
 !data/all/
 !data/all/*.yaml
+!data/frag/
+!data/frag/*.yaml
 archived/
 
 # Ascend-compiled
