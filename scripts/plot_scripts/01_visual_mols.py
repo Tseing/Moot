@@ -11,12 +11,14 @@ if __name__ == "__main__":
 
     rdBase.DisableLog("rdApp.warning")
 
-    save_path = "../../output/pretrain/0814pretrain_transformer_selfies_top10_mols.html"
+    save_path = "../../output/pretrain/0814pretrain_transformer_selfies_train_head1000_top1.html"
     # df = DataReader.prepare_inp_df("pretrain_test")
     # metrics = DatasetMetrics(df)
-    topk = 10
-    df = DataReader.prepare_out_df(
-        "../../output/pretrain/0814pretrain_transformer_selfies_top10.csv", topk=topk
+    topk = 1
+    df = DataReader.prepare_df(
+        "../../data/finetune/runtime/datasets_seed_0/finetune_train_head1000.csv",
+        "../../output/pretrain/0814pretrain_transformer_selfies_train_head1000_top1.csv",
+        topk=topk,
     )
     # print(df.columns)
     # print(df.shape)

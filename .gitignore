@@ -4,12 +4,14 @@ data/*
 data/all/*
 log/
 *.pt
+*.ipynb
+*.pkl
+*.svg
+*.png
 output/
 scripts/tasks/deprecated
 scripts/data_scripts/deprecated
 scripts/plot_scripts/output
-*.ipynb
-*.pkl
 !data/all/
 !data/all/*.yaml
 archived/

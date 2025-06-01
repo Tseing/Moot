@@ -44,6 +44,7 @@ def check_out_mmp(data_path: str, data_format: Literal["SMILES", "SELFIES"], wor
     # Process Output SMILES / SELFIES
     pandarallel.initialize(nb_workers=worker, progress_bar=True)
     gen_df = pd.read_csv(data_path, usecols=["input", "output"])
+    gen_df = gen_df.fillna("{eos}")
     inp_smi = gen_df["input"].parallel_apply(lambda s: "".join(s.strip().split(" ")))
     out_smi = gen_df["output"].parallel_apply(
         lambda s: "".join(s.strip("{eos}").strip().split(" "))
@@ -91,7 +92,53 @@ if __name__ == "__main__":
 
     # check_inp_mmp("../../data/exdata/exdata_proc_duplicate.csv")
 
+    # check_out_mmp(
+    #     data_path="../../output/top10/train_transformer_selfies_top10.csv",
+    #     data_format="SELFIES",
+    # )
+    # check_out_mmp(
+    #     data_path="../../output/top10/train_optformer_selfies_top10.csv",
+    #     data_format="SELFIES",
+    # )
+    # check_out_mmp(
+    #     data_path="../../output/top1/train_transformer_smiles_extop1_1.csv",
+    #     data_format="SMILES",
+    # )
+    # check_out_mmp(
+    #     data_path="../../output/top10/train_optformer_smiles_top10.csv",
+    #     data_format="SMILES",
+    # )
+
     check_out_mmp(
-        data_path="../../output/top10/train_transformer_selfies_top10.csv",
-        data_format="SELFIES",
+        data_path="../../output/pipeline_spliced/train_pipeline_transformer_smiles_top1.csv",
+        data_format="SMILES",
+    )
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_transformer_selfies_top1.csv",
+        data_format="SMILES",
+    )
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_optformer_smiles_top1.csv",
+        data_format="SMILES",
+    )
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_optformer_selfies_top1.csv",
+        data_format="SMILES",
+    )
+
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_transformer_smiles_extop1.csv",
+        data_format="SMILES",
+    )
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_transformer_selfies_extop1.csv",
+        data_format="SMILES",
+    )
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_optformer_smiles_extop1.csv",
+        data_format="SMILES",
+    )
+    check_out_mmp(
+        data_path="../../output/pipeline_spliced/train_pipeline_optformer_selfies_extop1.csv",
+        data_format="SMILES",
     )
