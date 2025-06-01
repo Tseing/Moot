@@ -54,17 +54,17 @@ After starting the server via the above commands and displaying the above inform
 
 ### Dataset & Checkpoints
 
-| Datasets          | Introduction                                                 | Download URL                                                                    |
-| ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `finetune.tar.gz` | MMP records in SMILES and SELFIES format                     | `https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/data/finetune.tar.gz` |
-| `frag.tar.gz`     | MMP records with fragments data in SMILES and SELFIES format | `https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/data/frag.tar.gz`     |
+| Datasets                                                                                         | Introduction URL                                             |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| [finetune.tar.gz](https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/data/finetune.tar.gz) | MMP records in SMILES and SELFIES format                     |
+| [frag.tar.gz](https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/data/frag.tar.gz)         | MMP records with fragments data in SMILES and SELFIES format |
 
-| Models                      | Introduction                         | Download URL                                                                                     |
-| --------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `optformer_smiles.pt`       | end-to-end Moot trained with SMILES  | `https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/optformer_smiles.pt`       |
-| `optformer_selfies.pt`      | end-to-end Moot trained with SELFIES | `https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/optformer_selfies.pt`      |
-| `frag_optformer_smiles.pt`  | Frag-Moot trained with SMILES        | `https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/frag_optformer_smiles.pt`  |
-| `frag_optformer_selfies.pt` | Frag-Moot trained with SELFIES       | `https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/frag_optformer_selfies.pt` |
+| Models                                                                                                                      | Introduction                         |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| [optformer_smiles.pt](https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/optformer_smiles.pt)             | end-to-end Moot trained with SMILES  |
+| [optformer_selfies.pt](https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/optformer_selfies.pt)           | end-to-end Moot trained with SELFIES |
+| [frag_optformer_smiles.pt](https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/frag_optformer_smiles.pt)   | Frag-Moot trained with SMILES        |
+| [frag_optformer_selfies.pt](https://ljpgroup-public.obs.cn-north-305.tjaicc.com/Moot/checkpoints/frag_optformer_selfies.pt) | Frag-Moot trained with SELFIES       |
 
 _\* Note: Optformer is an alias of Moot._
 
@@ -76,7 +76,6 @@ A task YAML file has the value `task_name`:
 
 ```yaml
 task_name: train_optformer_smiles
-...
 ```
 
 The command accepts the `task_name` parameter to read the specified configuration and start training:
