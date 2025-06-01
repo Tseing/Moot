@@ -3,7 +3,7 @@ import sys
 sys.path.append("..")
 import torch
 from torch.utils.data import DataLoader
-
+from torch import nn
 from src.dataset import MolProtDataset
 from src.model.optformer import OptFormer
 from src.tokenizer import (
@@ -27,7 +27,7 @@ if __name__ == "__main__":
         prot_max_len=1500,
         mol_tokenizer=smiles_tokenizer,
         prot_tokenizer=protein_tokenizer,
-        left_pad=True,
+        left_pad=False,
     )
 
     dataloader = DataLoader(
@@ -60,10 +60,11 @@ if __name__ == "__main__":
         padding_idx=pad_idx,
         mol_max_len=250,
         prot_max_len=1500,
+        left_pad=False,
         device=device,
     ).to(device)
 
-    for mol, prot, tgt in dataloader:
+    for (mol, prot), tgt in dataloader:
         print(f"vocab_size: {vocab_size}")
         mol = mol.int().to(device)
         prot = prot.int().to(device)
@@ -72,7 +73,18 @@ if __name__ == "__main__":
         print(prot.shape, prot.dtype)
         print(tgt.shape, tgt.dtype)
 
-        out, _ = model(mol, prot, tgt)
+        out, _ = model(mol, prot, tgt[:, :-1])
         # print(out)
         print(out.shape)
+        label = tgt[:, 1:]
+        print(label.shape)
+
+        n, seq_len = label.shape
+        y_hat = torch.reshape(out, (n * seq_len, -1))
+        y_label = torch.reshape(label, (n * seq_len, )).long()
+
+        print(y_hat.shape, y_label.shape)
+
+        loss = nn.CrossEntropyLoss()
+        print(loss(y_hat, y_label))
         break

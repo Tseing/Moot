@@ -146,12 +146,12 @@ if __name__ == "__main__":
 
     if len(cfg.data_cols) == 1:
 
-        def _get_data(chunk: pd.DataFrame) -> Tuple[List[str], None]:
+        def _get_data(chunk: pd.DataFrame) -> Tuple[List[str], Optional[List[str]]]:
             return chunk[cfg.data_cols[0]].to_list(), None
 
     elif len(cfg.data_cols) == 2:
 
-        def _get_data(chunk: pd.DataFrame) -> Tuple[List[str], List[str]]:
+        def _get_data(chunk: pd.DataFrame) -> Tuple[List[str], Optional[List[str]]]:
             return chunk[cfg.data_cols[0]].to_list(), chunk[cfg.data_cols[1]].to_list()
 
     else:

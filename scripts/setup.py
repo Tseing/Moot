@@ -21,7 +21,7 @@ from src.utils import Cfg, Log
 CONFIGS = {
     "probe_transformer_smiles": {
         "task_name": "probe_transformer_smiles",
-        "device": "cuda:0",
+        "device": "cpu",
         "ckpt_path": "train_transformer_smiles/model_epoch9_step0.pt",
         "word_table_path": "all/smiles_word_table.yaml",
         "data_format": "SMILES",
@@ -46,8 +46,8 @@ CONFIGS = {
     },
     "probe_transformer_selfies": {
         "task_name": "probe_transformer_selfies",
-        "device": "cuda:0",
-        "ckpt_path": "train_transformer_smiles/model_epoch9_step0.pt",
+        "device": "cpu",
+        "ckpt_path": "train_transformer_selfies/model_epoch9_step0.pt",
         "word_table_path": "all/selfies_word_table.yaml",
         "data_format": "SELFIES",
         "model": "Transformer",
@@ -71,7 +71,7 @@ CONFIGS = {
     },
     "probe_optformer_smiles": {
         "task_name": "probe_optformer_smiles",
-        "device": "cuda:0",
+        "device": "cpu",
         "ckpt_path": "train_optformer_smiles/model_epoch14_step0.pt",
         "word_table_path": "all/smiles_word_table.yaml",
         "data_format": "SMILES",
@@ -98,7 +98,7 @@ CONFIGS = {
     },
     "probe_optformer_selfies": {
         "task_name": "probe_optformer_selfies",
-        "device": "cuda:0",
+        "device": "cpu",
         "ckpt_path": "train_optformer_selfies/model_epoch13_step0.pt",
         "word_table_path": "all/selfies_word_table.yaml",
         "data_format": "SELFIES",
@@ -125,7 +125,7 @@ CONFIGS = {
     },
     "probe_frag_optformer_selfies": {
         "task_name": "probe_frag_optformer_smiles",
-        "device": "cuda:0",
+        "device": "cpu",
         "ckpt_path": "train_frag_optformer_smiles/model_epoch15_step0.pt",
         "word_table_path": "frag/smiles_word_table.yaml",
         "data_format": "FragSMILES",

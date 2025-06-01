@@ -56,6 +56,9 @@ class Metrics(ABC):
 
     @staticmethod
     def get_mol(smiles: Optional[str]) -> Optional[Mol]:
+        if smiles == "" or pd.isna(smiles):
+            return None
+
         try:
             mol = Chem.MolFromSmiles(smiles)
         except:
@@ -98,19 +101,19 @@ class Metrics(ABC):
         return self.df[col].parallel_apply(self.get_mol)
 
     def metric_heavy(self, col: str) -> pd.Series:
-        return self.df[col].astype("int32")
+        return self.df[col].dropna().astype("int32")
 
     def metric_sascore(self, col: str) -> pd.Series:
-        return self.df[col].parallel_apply(lambda s: self.get_mol(self.get_sascore(s)))
+        return self.df[col].parallel_apply(lambda s: self.get_sascore(self.get_mol(s)))
 
     def metric_qed(self, col: str) -> pd.Series:
-        return self.df[col].parallel_apply(lambda s: self.get_mol(self.get_qed(s)))
+        return self.df[col].parallel_apply(lambda s: self.get_qed(self.get_mol(s)))
 
     def metric_weight(self, col: str) -> pd.Series:
-        return self.df[col].parallel_apply(lambda s: self.get_mol(self.get_weight(s)))
+        return self.df[col].parallel_apply(lambda s: self.get_weight(self.get_mol(s)))
 
     def metric_scaffold(self, col: str) -> pd.Series:
-        return self.df[col].parallel_apply(lambda s: self.get_mol(self.get_scaffold(s)))
+        return self.df[col].parallel_apply(lambda s: self.get_scaffold(self.get_mol(s)))
 
     def metric_frag_sim(self, col_a: str, col_b: str) -> pd.Series:
         return self.df.parallel_apply(
@@ -180,7 +183,7 @@ class GenerationMetrics(Metrics):
 
     def concat_tokens(self) -> None:
         self.df["out"] = self.df["out"].parallel_apply(
-            lambda s: "".join(s.strip("{eos}").strip().split(" "))
+            lambda s: s.replace("{eos}", "").replace(" ", "")
         )
         if self.data_format == "SELFIES":
             self.df["out"] = self.df["out"].parallel_apply(selfies2smiles)
@@ -357,7 +360,6 @@ class MolMetrics(GenerationMetrics):
         table.inner_row_border = True
         print(table.table)
 
-
 class FragMetrics(GenerationMetrics):
     EXPECTED_COLS = [
         "target",
@@ -377,7 +379,7 @@ class FragMetrics(GenerationMetrics):
     def __init__(
         self,
         df: pd.DataFrame,
-        data_format: Literal["SMILES", "SELFISE"] = "SMILES",
+        data_format: Literal["SMILES", "SELFIES"] = "SMILES",
         topk: int = 1,
         worker: int = 10,
     ) -> None:

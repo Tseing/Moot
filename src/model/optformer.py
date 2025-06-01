@@ -328,16 +328,21 @@ class TransformerDecoder(IncrementalDecoder):
 
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
-        attn = None
+        attn = {}
 
         # decoder layers
-        for layer in self.layers:
-            x, attn = layer(
+        for i, layer in enumerate(self.layers):
+            x, layer_attn = layer(
                 x,
                 encoder_out,
                 encoder_padding_mask if encoder_padding_mask.any() else None,
                 incremental_state,
             )
+
+            attn[str(i)] = layer_attn
+
+        if None in attn.values():
+            attn = None
 
         # T x B x C -> B x T x C
         x = x.transpose(0, 1)
@@ -630,6 +635,30 @@ class OptFormer(nn.Module):
 
         return encoder_out, padding_mask
 
+    def enc_attn(
+        self,
+        mol_tokens: Int[Tensor, "bsz seq_len_a"],
+        prot_tokens: Int[Tensor, "bsz seq_len_b"],
+    ) -> Tuple[
+        Float[Tensor, "seq_len_a bsz d"],
+        Float[Tensor, "seq_len_b bsz d"],
+        Float[Tensor, "bsz seq_len_a seq_len_b"],
+        Float[Tensor, "bsz seq_len_b seq_len_a"],
+    ]:
+        x_a = self.embed_scale * self.mol_embedding(mol_tokens)
+        if self.mol_embed_positions is not None:
+            x_a += self.mol_embed_positions(mol_tokens)
+
+        x_b = self.embed_scale * self.mol_embedding(prot_tokens)
+        if self.prot_embed_positions is not None:
+            x_b += self.prot_embed_positions(prot_tokens)
+
+        x_a = F.dropout(x_a, p=self.embed_dropout, training=self.training)
+        x_b = F.dropout(x_b, p=self.embed_dropout, training=self.training)
+        x_a_padding_mask = mol_tokens.eq(self.padding_idx)
+        x_b_padding_mask = prot_tokens.eq(self.padding_idx)
+        return self.encoder.enc_attn(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
+
     def forward(
         self,
         mol_tokens: Int[Tensor, "bsz seq_len_a"],
@@ -694,6 +723,34 @@ class OptFormerEncoder(nn.Module):
 
         # x.shape == T x B x C, encoder_padding_mask.shape == B x T
         return x_a, x_b
+
+    def enc_attn(
+        self,
+        encoder_inp_a: Float[Tensor, "bsz seq_len_a d"],
+        inp_a_padding_mask: Bool[Tensor, "bsz seq_len"],
+        encoder_inp_b: Float[Tensor, "bsz seq_len_b d"],
+        inp_b_padding_mask: Bool[Tensor, "bsz seq_len"],
+    ) -> Tuple[
+        Float[Tensor, "seq_len_a bsz d_model"],
+        Float[Tensor, "seq_len_b bsz d_model"],
+        Float[Tensor, "bsz seq_len_a seq_len_b"],
+        Float[Tensor, "bsz seq_len_b seq_len_a"],
+    ]:
+        x_a, x_b = encoder_inp_a, encoder_inp_b
+
+        # B:batch size ; T: seq length ; C: embedding dim
+        # B x T x C -> T x B x C
+        x_a = x_a.transpose(0, 1)
+        x_b = x_b.transpose(0, 1)
+
+        x_a_padding_mask, x_b_padding_mask = inp_a_padding_mask, inp_b_padding_mask
+
+        # encoder layers
+        for layer in self.layers:
+            x_a, x_b, attn_a, attn_b = layer.enc_attn(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
+
+        # x.shape == T x B x C, encoder_padding_mask.shape == B x T
+        return x_a, x_b, attn_a, attn_b
 
     def reorder_encoder_out(self, encoder_out, encoder_padding_mask, new_order):
         if encoder_out is not None:
@@ -791,6 +848,22 @@ class OptFormerEncoderLayer(nn.Module):
         x_b: Float[Tensor, "seq_len_b bsz d"],
         x_b_padding_mask: Bool[Tensor, "seq_len_b bsz"],
     ) -> Tuple[Float[Tensor, "seq_len_a bsz d"], Float[Tensor, "seq_len_b bsz d"]]:
+        x_a, x_b, _, _ = self.enc_attn(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
+
+        return x_a, x_b
+
+    def enc_attn(
+        self,
+        x_a: Float[Tensor, "seq_len_a bsz d"],
+        x_a_padding_mask: Bool[Tensor, "seq_len_a bsz"],
+        x_b: Float[Tensor, "seq_len_b bsz d"],
+        x_b_padding_mask: Bool[Tensor, "seq_len_b bsz"],
+    ) -> Tuple[
+        Float[Tensor, "seq_len_a bsz d"],
+        Float[Tensor, "seq_len_b bsz d"],
+        Float[Tensor, "bsz seq_len_a seq_len_b"],
+        Float[Tensor, "bsz seq_len_b seq_len_a"],
+    ]:
         x_a = self.__forward_self_attn(
             x_a,
             x_a_padding_mask,
@@ -804,15 +877,14 @@ class OptFormerEncoderLayer(nn.Module):
             self.norm_b1,
         )
         residual_a, residual_b = x_a, x_b
-        x_a, x_b = self.cross_attn(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
+        x_a, x_b, attn_a, attn_b = self.cross_attn(x_a, x_a_padding_mask, x_b, x_b_padding_mask)
         x_a = self.__forward_post_cross_attn(
             x_a, residual_a, self.norm_a2, self.ffn_a, self.norm_a3
         )
         x_b = self.__forward_post_cross_attn(
             x_b, residual_b, self.norm_b2, self.ffn_b, self.norm_b3
         )
-
-        return x_a, x_b
+        return x_a, x_b, attn_a, attn_b
 
 
 class CrossAttnLayer(nn.Module):
@@ -834,30 +906,35 @@ class CrossAttnLayer(nn.Module):
         x_a_padding_mask: Bool[Tensor, "seq_len_a bsz"],
         x_b: Float[Tensor, "seq_len_b bsz d"],
         x_b_padding_mask: Bool[Tensor, "seq_len_b bsz "],
-    ) -> Tuple[Float[Tensor, "seq_len_a bsz d"], Float[Tensor, "seq_len_b bsz d"]]:
-        attn_a, _ = self.cross_attn_a(
+    ) -> Tuple[
+        Float[Tensor, "seq_len_a bsz d"],
+        Float[Tensor, "seq_len_b bsz d"],
+        Float[Tensor, "bsz seq_len_a seq_len_b"],
+        Float[Tensor, "bsz seq_len_b seq_len_a"],
+    ]:
+        x_a, attn_a = self.cross_attn_a(
             query=x_a,
             key=x_b,
             value=x_b,
             mask_future_timesteps=False,
             key_padding_mask=x_b_padding_mask,
             incremental_state=None,
-            need_weights=False,
+            need_weights=(not self.training),
             static_kv=False,
         )
 
-        attn_b, _ = self.cross_attn_b(
+        x_b, attn_b = self.cross_attn_b(
             query=x_b,
             key=x_a,
             value=x_a,
             mask_future_timesteps=False,
             key_padding_mask=x_a_padding_mask,
             incremental_state=None,
-            need_weights=False,
+            need_weights=(not self.training),
             static_kv=False,
         )
 
-        return attn_a, attn_b
+        return x_a, x_b, attn_a, attn_b
 
 
 class AttnFuse(nn.Module):

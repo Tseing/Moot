@@ -49,7 +49,7 @@ def _make_combine(mol1, mol2):
     return rwmol.GetMol()
 
 
-def get_marked_atoms(core: str, frag: str):
+def splice_mol(core: str, frag: str) -> Mol:
     assert (
         DUMMY_ATOM in core and DUMMY_ATOM in frag
     ), f"There is not dummy atom '*' in core or frag:\n-> {core}\n-> {frag}"
@@ -66,6 +66,14 @@ def get_marked_atoms(core: str, frag: str):
 
     _mark_atom_to_combine(core)
     combined_mol = _make_combine(core, frag)
+
+    return combined_mol
+
+def get_marked_atoms(core: str, frag: str):
+    assert (
+        DUMMY_ATOM in core and DUMMY_ATOM in frag
+    ), f"There is not dummy atom '*' in core or frag:\n-> {core}\n-> {frag}"
+    combined_mol = splice_mol(core, frag)
 
     for atom in combined_mol.GetAtoms():
         if atom.HasProp("to_be_dummy"):
